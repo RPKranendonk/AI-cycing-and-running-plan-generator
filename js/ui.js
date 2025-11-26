@@ -57,6 +57,7 @@ function toggleProviderFields() {
 
 function toggleSportFields() {
     const sport = document.getElementById('sportTypeInput').value;
+    state.sportType = sport; // Ensure state is synced
     const runContainer = document.getElementById('runDistanceContainer');
     const cycleContainer = document.getElementById('cycleDistanceContainer');
     const fitnessContainer = document.getElementById('currentFitnessContainer');
