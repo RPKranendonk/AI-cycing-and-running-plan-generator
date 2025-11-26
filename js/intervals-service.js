@@ -214,65 +214,120 @@ async function pushWeeklyTargetsToIntervals() {
     try {
         const isCycling = state.sportType === 'Cycling';
 
-        // 1. Get Credentials directly from inputs (most reliable) or fallback to state
+        // 1. Get Credentials
         const apiKeyInput = document.getElementById('apiKeyInput');
         const apiKey = apiKeyInput && apiKeyInput.value ? apiKeyInput.value.trim() : state.apiKey;
 
         const athleteIdInput = document.getElementById('athleteIdInput');
         let athleteId = athleteIdInput && athleteIdInput.value ? athleteIdInput.value.trim() : state.athleteId;
 
-        if (!apiKey) throw new Error("API Key is missing. Please enter it in the configuration.");
-        if (!athleteId) throw new Error("Athlete ID is missing. Please enter it next to the API Key.");
+        if (!apiKey || !athleteId) throw new Error("API Key or Athlete ID missing.");
 
-        console.log(`Pushing with: AthleteID=${athleteId}, APIKey=${apiKey ? '***' : 'Missing'}`);
-
-        // Use Plan Start Date if available, otherwise fallback to today/calculated dates
+        // 2. Determine Date Range for the Whole Plan
         const planStartInput = document.getElementById('planStartDateInput');
         const planStartDate = planStartInput && planStartInput.value ? new Date(planStartInput.value) : new Date();
 
-        // 2. Prepare promises for all weeks
-        const promises = [];
+        // Find start of first week and end of last week
+        const firstWeek = state.generatedPlan[0];
+        const lastWeek = state.generatedPlan[state.generatedPlan.length - 1];
+
+        if (!firstWeek || !lastWeek) throw new Error("Invalid plan data.");
+
+        const startD = new Date(planStartDate);
+        startD.setDate(planStartDate.getDate() + ((firstWeek.week - 1) * 7));
+        // Adjust to Monday
+        const day = startD.getDay();
+        const diff = startD.getDate() - day + (day == 0 ? -6 : 1);
+        const planStartMonday = new Date(startD);
+        planStartMonday.setDate(diff);
+
+        const endD = new Date(planStartMonday);
+        endD.setDate(planStartMonday.getDate() + (state.generatedPlan.length * 7)); // End of last week
+
+        const sStr = planStartMonday.toISOString().split('T')[0];
+        const eStr = endD.toISOString().split('T')[0];
+
+        const auth = btoa(`API_KEY:${apiKey}`);
         const targetType = isCycling ? "Ride" : "Run";
 
+        // 3. Fetch Existing Targets (Single Request)
+        console.log(`Fetching existing targets from ${sStr} to ${eStr}...`);
+        const getRes = await fetch(`https://intervals.icu/api/v1/athlete/${athleteId}/events?oldest=${sStr}&newest=${eStr}&category=TARGET`, {
+            headers: { 'Authorization': `Basic ${auth}` }
+        });
+
+        if (getRes.ok) {
+            const existingEvents = await getRes.json();
+            const targetsToDelete = existingEvents.filter(e => e.category === 'TARGET' && e.type === targetType);
+
+            // 4. Delete Existing Targets (Sequential to be safe)
+            if (targetsToDelete.length > 0) {
+                showToast(`Cleaning up ${targetsToDelete.length} old targets...`);
+                for (const t of targetsToDelete) {
+                    await fetch(`https://intervals.icu/api/v1/athlete/${athleteId}/events/${t.id}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Basic ${auth}` }
+                    });
+                }
+            }
+        }
+
+        // 5. Prepare Bulk Payload
+        const bulkPayload = [];
+
         state.generatedPlan.forEach(week => {
-            // Calculate Monday of this week
             const weekStart = new Date(planStartDate);
             weekStart.setDate(planStartDate.getDate() + ((week.week - 1) * 7));
 
-            const day = weekStart.getDay();
-            const diff = weekStart.getDate() - day + (day == 0 ? -6 : 1); // adjust when day is sunday
+            const d = weekStart.getDay();
+            const diff = weekStart.getDate() - d + (d == 0 ? -6 : 1);
             const monday = new Date(weekStart);
             monday.setDate(diff);
 
-            if (isNaN(monday.getTime())) {
-                console.warn(`Skipping week ${week.week}: Invalid Date`);
-                return;
-            }
-
+            if (isNaN(monday.getTime())) return;
             const dateStr = monday.toISOString().split('T')[0];
 
-            // Get value (km for running, TSS for cycling)
             const value = week.rawKm || week.mileage || 0;
-            if (!value) {
-                console.warn(`Week ${week.week} missing rawKm/mileage`, week);
-                return;
-            }
+            if (!value) return;
 
-            // Create promise for this week's target
-            promises.push(createTargetPromise(apiKey, athleteId, dateStr, targetType, value));
+            const event = {
+                category: "TARGET",
+                start_date_local: `${dateStr}T00:00:00`,
+                type: targetType,
+                name: `Weekly ${targetType} Target`,
+                external_id: `target_${targetType.toLowerCase()}_${dateStr}`,
+            };
+
+            if (targetType === "Run") event.distance_target = Math.round(value * 1000);
+            if (targetType === "Ride") event.load_target = Math.round(value);
+
+            bulkPayload.push(event);
         });
 
-        // 3. Execute all promises
-        await Promise.all(promises);
-        showToast(`✅ Pushed ${promises.length} weekly targets!`);
+        // 6. Send Single Bulk Request
+        if (bulkPayload.length > 0) {
+            showToast(`Uploading ${bulkPayload.length} targets...`);
+            const response = await fetch(`https://intervals.icu/api/v1/athlete/${athleteId}/events/bulk?upsert=true`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Basic ${auth}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(bulkPayload)
+            });
+
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`API Error: ${response.status} - ${errText}`);
+            }
+            showToast(`✅ Successfully pushed ${bulkPayload.length} weeks!`);
+        } else {
+            showToast("⚠️ No targets to push.");
+        }
 
     } catch (e) {
         console.error(e);
-        if (e.message.includes("Duplicate weekly target")) {
-            showToast("❌ Duplicate target! Please delete manually on Intervals.icu.");
-        } else {
-            showToast(`❌ Push Error: ${e.message}`);
-        }
+        showToast(`❌ Push Error: ${e.message}`);
     } finally {
         if (pushBtn) { pushBtn.disabled = false; pushBtn.textContent = "🎯 Push Weekly Targets"; }
     }
