@@ -396,6 +396,10 @@ function viewProgressionFromInputs() {
 
 function generateProgressionCalendar(startVol, startLR, raceDateStr) {
     const container = document.getElementById('progression-calendar-content');
+    if (!container) {
+        console.error("progression-calendar-content container not found!");
+        return;
+    }
 
     // Get options from UI
     const startWithRestWeek = document.getElementById('use-rest-week') ? document.getElementById('use-rest-week').checked : false;
@@ -754,7 +758,23 @@ function importConfiguration() {
         state.customRestWeeks = config.customRestWeeks || [];
         state.forceBuildWeeks = config.forceBuildWeeks || [];
 
+        // Sync State from Config/Inputs
+        state.sportType = getVal('sportTypeInput');
+        state.raceDate = getVal('raceDateInput');
+        state.goalTime = getVal('goalTimeInput');
+        state.raceType = getVal('raceTypeInput', 'Marathon');
+
+        // Persist to LocalStorage (like saveSettings)
+        localStorage.setItem('elite_raceDate', state.raceDate);
+        localStorage.setItem('elite_goalTime', state.goalTime);
+        localStorage.setItem('elite_raceType', state.raceType);
+        localStorage.setItem('elite_sportType', state.sportType);
+
         showToast("✅ Configuration Loaded!");
+
+        // Regenerate and Render
+        generateTrainingPlan();
+        renderWeeklyPlan();
 
         // Auto-refresh preview if possible
         if (config.raceDate) {
