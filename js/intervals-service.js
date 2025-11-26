@@ -283,90 +283,40 @@ async function pushWeeklyTargetsToIntervals() {
 
         if (!apiKey || !athleteId) throw new Error("API Key or Athlete ID missing.");
 
-        // 2. Determine Date Range for the Whole Plan
+        // 2. Prepare promises for all weeks
+        const promises = [];
+        const targetType = isCycling ? "Ride" : "Run";
+
+        // Determine Plan Start Date
         const planStartInput = document.getElementById('planStartDateInput');
         const planStartDate = planStartInput && planStartInput.value ? new Date(planStartInput.value) : new Date();
 
-        // Find start of first week and end of last week
-        const firstWeek = state.generatedPlan[0];
-        const lastWeek = state.generatedPlan[state.generatedPlan.length - 1];
-
-        if (!firstWeek || !lastWeek) throw new Error("Invalid plan data.");
-
-        const startD = new Date(planStartDate);
-        startD.setDate(planStartDate.getDate() + ((firstWeek.week - 1) * 7));
-        // Adjust to Monday
-        const day = startD.getDay();
-        const diff = startD.getDate() - day + (day == 0 ? -6 : 1);
-        const planStartMonday = new Date(startD);
-        planStartMonday.setDate(diff);
-
-        const endD = new Date(planStartMonday);
-        endD.setDate(planStartMonday.getDate() + (state.generatedPlan.length * 7)); // End of last week
-
-        const sStr = planStartMonday.toISOString().split('T')[0];
-        const eStr = endD.toISOString().split('T')[0];
-
-        const auth = btoa(`API_KEY:${apiKey}`);
-        const targetType = isCycling ? "Ride" : "Run";
-
-        // 3. Fetch Existing Targets (Single Request)
-        console.log(`Fetching existing targets from ${sStr} to ${eStr}...`);
-        const getRes = await fetch(`https://intervals.icu/api/v1/athlete/${athleteId}/events?oldest=${sStr}&newest=${eStr}&category=TARGET`, {
-            headers: { 'Authorization': `Basic ${auth}` }
-        });
-
-        if (getRes.ok) {
-            const existingEvents = await getRes.json();
-            const targetsToDelete = existingEvents.filter(e => e.category === 'TARGET' && e.type === targetType);
-
-            // 4. Delete Existing Targets (Using Helper)
-            if (targetsToDelete.length > 0) {
-                showToast(`Cleaning up ${targetsToDelete.length} old targets...`);
-                await deleteEventsSequential(apiKey, athleteId, targetsToDelete);
-            }
-        }
-
-        // 5. Prepare Bulk Payload
-        const bulkPayload = [];
-
         state.generatedPlan.forEach(week => {
+            // Calculate Date for this week's Monday
+            // Logic: Plan Start Date + (WeekNum - 1) weeks
             const weekStart = new Date(planStartDate);
             weekStart.setDate(planStartDate.getDate() + ((week.week - 1) * 7));
 
+            // Adjust to Monday to be safe (though Plan Start should be Monday)
             const d = weekStart.getDay();
-            const diff = weekStart.getDate() - d + (d == 0 ? -6 : 1);
+            const diff = weekStart.getDate() - d + (d == 0 ? -6 : 1); // adjust when day is sunday
             const monday = new Date(weekStart);
             monday.setDate(diff);
 
             if (isNaN(monday.getTime())) return;
-            const dateStr = monday.toISOString().split('T')[0];
 
+            const dateStr = monday.toISOString().split('T')[0];
             const value = week.rawKm || week.mileage || 0;
+
             if (!value) return;
 
-            const event = {
-                category: "TARGET",
-                start_date_local: `${dateStr}T00:00:00`,
-                type: targetType,
-                name: `Weekly ${targetType} Target`,
-                external_id: `target_${targetType.toLowerCase()}_${dateStr}`,
-            };
-
-            if (targetType === "Run") event.distance_target = Math.round(value * 1000);
-            if (targetType === "Ride") event.load_target = Math.round(value);
-
-            bulkPayload.push(event);
+            // Create promise for this week's target
+            promises.push(createTargetPromise(apiKey, athleteId, dateStr, targetType, value));
         });
 
-        // 6. Send Single Bulk Request (Using Helper)
-        if (bulkPayload.length > 0) {
-            showToast(`Uploading ${bulkPayload.length} targets...`);
-            await uploadEventsBulk(apiKey, athleteId, bulkPayload);
-            showToast(`✅ Successfully pushed ${bulkPayload.length} weeks!`);
-        } else {
-            showToast("⚠️ No targets to push.");
-        }
+        // 3. Execute all promises
+        await Promise.all(promises);
+        showToast(`✅ Pushed ${promises.length} weekly targets!`);
 
     } catch (e) {
         console.error(e);
