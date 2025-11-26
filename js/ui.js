@@ -232,6 +232,17 @@ async function testIntervalsConnection() {
         state.athleteName = `${data.firstname} ${data.lastname}`;
         state.apiKey = apiKey;
         state.athleteId = data.id;
+
+        // Set Default Dates
+        const today = new Date();
+        const planStartInput = document.getElementById('planStartDateInput');
+        if (planStartInput) {
+            planStartInput.valueAsDate = today;
+        }
+
+        const raceDate = new Date();
+        raceDate.setDate(today.getDate() + (16 * 7)); // Default 16 weeks out
+        document.getElementById('raceDateInput').valueAsDate = raceDate;
         document.getElementById('athleteIdInput').value = data.id;
 
         statusBox.innerHTML = `
@@ -751,12 +762,18 @@ function generateProgressionCalendar(startVol, startLR, raceDateStr) {
     };
 
     let plan = [];
+
+    // Get Plan Start Date (default to Today if not set)
+    const planStartInput = document.getElementById('planStartDateInput');
+    const planStartDate = planStartInput && planStartInput.value ? new Date(planStartInput.value) : new Date();
+
+    // Calculate Total Weeks based on Plan Start Date
+    const msPerWeek = 1000 * 60 * 60 * 24 * 7;
+    const rDate = new Date(raceDateStr);
+    const totalWeeks = Math.ceil((rDate - planStartDate) / msPerWeek);
+
     if (isCycling) {
-        // Calculate Total Weeks
-        const msPerWeek = 1000 * 60 * 60 * 24 * 7;
-        const today = new Date();
-        const rDate = new Date(raceDateStr);
-        const totalWeeks = Math.ceil((rDate - today) / msPerWeek);
+        // Calculate Total Weeks (Already done above)
 
         // Get Inputs
         const currentCtl = parseFloat(document.getElementById('current-fitness').value) || 40;
@@ -779,8 +796,8 @@ function generateProgressionCalendar(startVol, startLR, raceDateStr) {
 
         // Map to UI structure
         plan = advancedPlan.map(w => {
-            const weekStart = new Date(today);
-            weekStart.setDate(today.getDate() + ((w.weekNumber - 1) * 7));
+            const weekStart = new Date(planStartDate);
+            weekStart.setDate(planStartDate.getDate() + ((w.weekNumber - 1) * 7));
             return {
                 week: w.weekNumber,
                 blockType: w.isRecovery ? "Recovery" : "Build",
@@ -941,7 +958,7 @@ function generateProgressionCalendar(startVol, startLR, raceDateStr) {
 
 // Add Global Listeners for Auto-Update
 document.addEventListener('DOMContentLoaded', () => {
-    const inputs = ['target-volume', 'target-long-run', 'raceDateInput', 'taperDurationInput', 'longRunProgressionInput', 'progressionRateInput', 'raceTypeInput'];
+    const inputs = ['target-volume', 'target-long-run', 'raceDateInput', 'planStartDateInput', 'taperDurationInput', 'longRunProgressionInput', 'progressionRateInput', 'raceTypeInput'];
     inputs.forEach(id => {
         const el = document.getElementById(id);
         if (el) {
