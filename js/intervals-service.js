@@ -200,6 +200,66 @@ async function sendTargetPayload(apiKey, athleteId, payload, type) {
     return response;
 }
 
+// --- REUSABLE BULK API HELPERS ---
+
+/**
+ * Uploads an array of events to Intervals.icu using the bulk endpoint.
+ * @param {string} apiKey - User API Key
+ * @param {string} athleteId - User Athlete ID
+ * @param {Array} events - Array of event objects
+ * @returns {Promise<Object>} - API Response
+ */
+async function uploadEventsBulk(apiKey, athleteId, events) {
+    if (!events || events.length === 0) return;
+
+    const auth = btoa(`API_KEY:${apiKey}`);
+    console.log(`Uploading ${events.length} events in bulk...`);
+
+    const response = await fetch(`https://intervals.icu/api/v1/athlete/${athleteId}/events/bulk?upsert=true`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Basic ${auth}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(events)
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Bulk Upload Error:', errorText);
+        throw new Error(`Bulk Upload Failed: ${response.status} - ${errorText}`);
+    }
+
+    return response.json();
+}
+
+/**
+ * Deletes an array of events sequentially to avoid rate limits.
+ * @param {string} apiKey - User API Key
+ * @param {string} athleteId - User Athlete ID
+ * @param {Array} events - Array of event objects (must have 'id')
+ */
+async function deleteEventsSequential(apiKey, athleteId, events) {
+    if (!events || events.length === 0) return;
+
+    const auth = btoa(`API_KEY:${apiKey}`);
+    console.log(`Deleting ${events.length} events sequentially...`);
+
+    for (const event of events) {
+        try {
+            await fetch(`https://intervals.icu/api/v1/athlete/${athleteId}/events/${event.id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Basic ${auth}` }
+            });
+        } catch (e) {
+            console.warn(`Failed to delete event ${event.id}:`, e);
+            // Continue deleting others even if one fails
+        }
+    }
+}
+
+// --- MAIN FUNCTIONS ---
+
 async function pushWeeklyTargetsToIntervals() {
     if (!state.generatedPlan || state.generatedPlan.length === 0) {
         return showToast("No plan generated yet.");
@@ -260,15 +320,10 @@ async function pushWeeklyTargetsToIntervals() {
             const existingEvents = await getRes.json();
             const targetsToDelete = existingEvents.filter(e => e.category === 'TARGET' && e.type === targetType);
 
-            // 4. Delete Existing Targets (Sequential to be safe)
+            // 4. Delete Existing Targets (Using Helper)
             if (targetsToDelete.length > 0) {
                 showToast(`Cleaning up ${targetsToDelete.length} old targets...`);
-                for (const t of targetsToDelete) {
-                    await fetch(`https://intervals.icu/api/v1/athlete/${athleteId}/events/${t.id}`, {
-                        method: 'DELETE',
-                        headers: { 'Authorization': `Basic ${auth}` }
-                    });
-                }
+                await deleteEventsSequential(apiKey, athleteId, targetsToDelete);
             }
         }
 
@@ -304,22 +359,10 @@ async function pushWeeklyTargetsToIntervals() {
             bulkPayload.push(event);
         });
 
-        // 6. Send Single Bulk Request
+        // 6. Send Single Bulk Request (Using Helper)
         if (bulkPayload.length > 0) {
             showToast(`Uploading ${bulkPayload.length} targets...`);
-            const response = await fetch(`https://intervals.icu/api/v1/athlete/${athleteId}/events/bulk?upsert=true`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Basic ${auth}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(bulkPayload)
-            });
-
-            if (!response.ok) {
-                const errText = await response.text();
-                throw new Error(`API Error: ${response.status} - ${errText}`);
-            }
+            await uploadEventsBulk(apiKey, athleteId, bulkPayload);
             showToast(`✅ Successfully pushed ${bulkPayload.length} weeks!`);
         } else {
             showToast("⚠️ No targets to push.");

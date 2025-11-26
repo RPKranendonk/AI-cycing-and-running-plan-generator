@@ -3,6 +3,12 @@
 // ==========================================
 
 function calculateCyclingPlan(startTss, currentCtl, raceDateStr, options = {}, startLongRideHours = 1.5) {
+    // Input Validation
+    startTss = parseFloat(startTss);
+    currentCtl = parseFloat(currentCtl);
+    if (isNaN(startTss)) startTss = 300; // Default fallback
+    if (isNaN(currentCtl)) currentCtl = 40; // Default fallback
+
     const raceDate = new Date(raceDateStr);
     const today = new Date();
     const day = today.getDay() || 7;

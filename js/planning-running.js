@@ -3,6 +3,12 @@
 // ==========================================
 
 function calculateMarathonPlan(startVol, startLR, raceDateStr, planStartDate, options = {}) {
+    // Input Validation
+    startVol = parseFloat(startVol);
+    startLR = parseFloat(startLR);
+    if (isNaN(startVol)) startVol = 30; // Default fallback
+    if (isNaN(startLR)) startLR = 10;   // Default fallback
+
     const raceDate = new Date(raceDateStr);
 
     // Use Plan Start Date if provided, otherwise default to Today

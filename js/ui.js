@@ -55,9 +55,16 @@ function toggleProviderFields() {
     }
 }
 
+// --- HELPER: Safe DOM Access ---
+function getVal(id, defaultVal = "") {
+    const el = document.getElementById(id);
+    return el ? el.value : defaultVal;
+}
+
 function toggleSportFields() {
-    const sport = document.getElementById('sportTypeInput').value;
+    const sport = getVal('sportTypeInput', 'Running');
     state.sportType = sport; // Ensure state is synced
+
     const runContainer = document.getElementById('runDistanceContainer');
     const cycleContainer = document.getElementById('cycleDistanceContainer');
     const fitnessContainer = document.getElementById('currentFitnessContainer');
@@ -75,14 +82,9 @@ function toggleSportFields() {
         progressionPanel.classList.remove('flex');
     }
 
-    // 3. Reset Inputs (Optional, but good for "completely reset")
-    // document.getElementById('target-volume').value = '';
-    // document.getElementById('target-long-run').value = '';
-    // document.getElementById('current-fitness').value = '';
-
     if (sport === 'Cycling') {
-        runContainer.classList.add('hidden');
-        cycleContainer.classList.remove('hidden');
+        if (runContainer) runContainer.classList.add('hidden');
+        if (cycleContainer) cycleContainer.classList.remove('hidden');
         if (fitnessContainer) fitnessContainer.classList.remove('hidden');
 
         // Update Taper Options for Cycling (1-2 weeks)
@@ -93,8 +95,8 @@ function toggleSportFields() {
             `;
         }
     } else {
-        runContainer.classList.remove('hidden');
-        cycleContainer.classList.add('hidden');
+        if (runContainer) runContainer.classList.remove('hidden');
+        if (cycleContainer) cycleContainer.classList.add('hidden');
         if (fitnessContainer) fitnessContainer.classList.add('hidden');
 
         // Update Taper Options for Running (Standard)
@@ -277,36 +279,32 @@ function testAIContext() {
 }
 
 function saveSettings() {
-    state.apiKey = document.getElementById('apiKeyInput').value.trim();
-    state.athleteId = document.getElementById('athleteIdInput').value.trim();
-    state.trainingHistory = document.getElementById('historyInput').value;
-    state.injuries = document.getElementById('injuriesInput').value;
-    state.gymAccess = document.getElementById('gymAccessInput').value;
-    state.trainingPreferences = document.getElementById('preferencesInput').value;
+    state.apiKey = getVal('apiKeyInput').trim();
+    state.athleteId = getVal('athleteIdInput').trim();
+    state.trainingHistory = getVal('historyInput');
+    state.injuries = getVal('injuriesInput');
+    state.gymAccess = getVal('gymAccessInput');
+    state.trainingPreferences = getVal('preferencesInput');
 
     // New Smart Planner Inputs
-    state.startingVolume = document.getElementById('target-volume').value;
-    state.startingLongRun = document.getElementById('target-long-run').value;
+    state.startingVolume = getVal('target-volume');
+    state.startingLongRun = getVal('target-long-run');
     state.startWithRestWeek = document.getElementById('use-rest-week') ? document.getElementById('use-rest-week').checked : false;
 
-    state.aiApiKey = document.getElementById('aiApiKeyInput').value;
-    state.geminiApiKey = document.getElementById('geminiApiKeyInput').value;
-    state.aiProvider = document.getElementById('aiProviderSelect').value;
-    state.raceDate = document.getElementById('raceDateInput').value;
-    state.goalTime = document.getElementById('goalTimeInput').value;
-    state.goalTime = document.getElementById('goalTimeInput').value;
-    state.aiProvider = document.getElementById('aiProviderSelect').value;
-    state.raceDate = document.getElementById('raceDateInput').value;
-    state.goalTime = document.getElementById('goalTimeInput').value;
+    state.aiApiKey = getVal('aiApiKeyInput');
+    state.geminiApiKey = getVal('geminiApiKeyInput');
+    state.aiProvider = getVal('aiProviderSelect');
+    state.raceDate = getVal('raceDateInput');
+    state.goalTime = getVal('goalTimeInput');
 
     // Sport & Distance Logic
-    state.sportType = document.getElementById('sportTypeInput') ? document.getElementById('sportTypeInput').value : "Running";
+    state.sportType = getVal('sportTypeInput', 'Running');
 
     if (state.sportType === "Cycling") {
-        const dist = document.getElementById('cycleDistanceInput').value;
+        const dist = getVal('cycleDistanceInput');
         state.raceType = dist ? `${dist}km Ride` : "Cycling";
     } else {
-        state.raceType = document.getElementById('raceTypeInput') ? document.getElementById('raceTypeInput').value : "Marathon";
+        state.raceType = getVal('raceTypeInput', 'Marathon');
     }
 
     // Sync Configurator Inputs
@@ -679,24 +677,24 @@ function exportConfiguration() {
         const config = {
             apiKey: state.apiKey,
             athleteId: state.athleteId,
-            sportType: document.getElementById('sportTypeInput').value,
-            raceDate: document.getElementById('raceDateInput').value,
-            goalTime: document.getElementById('goalTimeInput').value,
-            raceType: document.getElementById('raceTypeInput') ? document.getElementById('raceTypeInput').value : "Marathon",
+            sportType: getVal('sportTypeInput'),
+            raceDate: getVal('raceDateInput'),
+            goalTime: getVal('goalTimeInput'),
+            raceType: getVal('raceTypeInput', 'Marathon'),
 
             // Running Inputs
-            runDistance: document.getElementById('runDistanceInput') ? document.getElementById('runDistanceInput').value : "",
+            runDistance: getVal('runDistanceInput'),
 
             // Cycling Inputs
-            cycleDistance: document.getElementById('cycleDistanceInput') ? document.getElementById('cycleDistanceInput').value : "",
+            cycleDistance: getVal('cycleDistanceInput'),
 
             // Smart Planning Inputs
-            targetVolume: document.getElementById('target-volume').value,
-            targetLongRun: document.getElementById('target-long-run').value,
-            progressionRate: document.getElementById('progressionRateInput').value,
-            longRunProgression: document.getElementById('longRunProgressionInput') ? document.getElementById('longRunProgressionInput').value : "",
-            taperDuration: document.getElementById('taperDurationInput').value,
-            currentFitness: document.getElementById('current-fitness').value,
+            targetVolume: getVal('target-volume'),
+            targetLongRun: getVal('target-long-run'),
+            progressionRate: getVal('progressionRateInput'),
+            longRunProgression: getVal('longRunProgressionInput'),
+            taperDuration: getVal('taperDurationInput'),
+            currentFitness: getVal('current-fitness'),
 
             // State Arrays
             customRestWeeks: state.customRestWeeks || [],
