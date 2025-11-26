@@ -116,7 +116,7 @@ function init() {
 
     // Pre-fill Plan Start Date with next Monday (or today if Monday)
     const planStartInput = document.getElementById('planStartDateInput');
-    if (planStartInput && !planStartInput.value) {
+    if (planStartInput) {
         const today = new Date();
         const day = today.getDay();
         const diff = today.getDate() - day + (day == 0 ? -6 : 1); // adjust when day is sunday

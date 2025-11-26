@@ -676,6 +676,8 @@ document.addEventListener('DOMContentLoaded', () => {
 function exportConfiguration() {
     try {
         const config = {
+            apiKey: state.apiKey,
+            athleteId: state.athleteId,
             sportType: document.getElementById('sportTypeInput').value,
             raceDate: document.getElementById('raceDateInput').value,
             goalTime: document.getElementById('goalTimeInput').value,
@@ -723,6 +725,15 @@ function importConfiguration() {
         const config = JSON.parse(atob(configStr));
 
         // Restore Values
+        if (config.apiKey) {
+            state.apiKey = config.apiKey;
+            if (document.getElementById('apiKeyInput')) document.getElementById('apiKeyInput').value = config.apiKey;
+        }
+        if (config.athleteId) {
+            state.athleteId = config.athleteId;
+            if (document.getElementById('athleteIdInput')) document.getElementById('athleteIdInput').value = config.athleteId;
+        }
+
         if (config.sportType) document.getElementById('sportTypeInput').value = config.sportType;
         toggleSportFields(); // Trigger UI update
 
