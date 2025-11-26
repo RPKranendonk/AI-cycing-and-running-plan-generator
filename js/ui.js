@@ -502,8 +502,8 @@ function generateProgressionCalendar(startVol, startLR, raceDateStr) {
     // Pre-fill customRestWeeks based on the plan's suggestions (only on first run/reset)
     // Actually, better to just let the checkboxes reflect the plan state.
 
-    let html = '<div class="grid grid-cols-6 gap-1 text-[10px] font-bold text-slate-400 border-b border-slate-700 pb-1 mb-1 text-center">';
-    html += `<div>Week</div><div>Date</div><div>Phase</div><div>Rest?</div><div>${isCycling ? 'Load' : 'Volume'}</div><div>${isCycling ? 'Long Ride' : 'Long Run'}</div></div>`;
+    let html = '<div class="grid grid-cols-7 gap-1 text-[10px] font-bold text-slate-400 border-b border-slate-700 pb-1 mb-1 text-center">';
+    html += `<div>Week</div><div>Date</div><div>Phase</div><div>Rest?</div><div>${isCycling ? 'Load' : 'Volume'}</div><div>${isCycling ? 'Long Ride' : 'Long Run'}</div><div>Action</div></div>`;
 
     // Track gaps
     let lastRestWeek = 0;
@@ -532,16 +532,26 @@ function generateProgressionCalendar(startVol, startLR, raceDateStr) {
         let rowClass = "border-b border-slate-800 py-1 text-center";
         let phaseDisplay = week.phaseName.replace(" Phase", ""); // Shorten name
         let isRest = false;
+        let phaseClass = "";
+        let restBadge = "";
 
         if (week.isRaceWeek) {
             phaseDisplay = "RACE";
             rowClass += " bg-purple-900/20 text-purple-200";
+            phaseClass = "text-purple-200";
         } else if (week.blockType === "Taper") {
             rowClass += " text-blue-200";
+            phaseClass = "text-blue-200";
         } else if (week.weekName.includes("Recovery") || week.weekName === "Recovery Start" || week.weekName === "Custom Recovery") {
             phaseDisplay = "Recov";
             rowClass += " text-green-200";
+            phaseClass = "text-green-200";
             isRest = true;
+            restBadge = `<span class="inline-block bg-green-600 text-white text-[8px] px-1 rounded-full">R</span>`;
+        } else if (week.blockType === "Peak") {
+            phaseClass = "text-orange-200";
+        } else {
+            phaseClass = "text-slate-300";
         }
 
         // Gap Check
@@ -573,14 +583,22 @@ function generateProgressionCalendar(startVol, startLR, raceDateStr) {
             checkboxHtml = `<input type="checkbox" class="rest-week-toggle accent-green-500" data-week="${week.week}" ${isChecked} ${disabledAttr}>`;
         }
 
-        html += `<div class="${rowClass} grid grid-cols-6 gap-1 items-center text-[10px]">`;
-        html += `<div>${week.week}</div>`;
-        html += `<div class="text-[9px] text-slate-500">${dateStr}</div>`;
-        html += `<div>${phaseDisplay}</div>`;
-        html += `<div>${checkboxHtml}</div>`;
-        html += `<div class="font-mono">${week.mileage} ${isCycling ? 'TSS' : 'km'}</div>`;
-        html += `<div class="font-mono">${week.longRun} ${isCycling ? 'h' : 'km'}</div>`;
-        html += `</div>`;
+        html += `
+        <div class="grid grid-cols-7 gap-1 text-[10px] items-center text-center p-1 rounded hover:bg-slate-800 transition-colors ${rowClass}">
+            <div class="font-bold text-slate-300">W${week.week}</div>
+            <div class="text-slate-500">${dateStr}</div>
+            <div class="${phaseClass}">${week.phaseName || week.blockType}</div>
+            <div>${checkboxHtml}</div>
+            <div class="font-mono text-slate-300">${week.mileage} ${isCycling ? 'TSS' : 'km'}</div>
+            <div class="font-mono text-slate-300">${week.longRun} ${isCycling ? 'h' : 'km'}</div>
+            <div>
+                <button id="push-week-btn-${index}" onclick="pushSingleWeekTarget(${index})" 
+                    class="bg-blue-600 hover:bg-blue-500 text-white px-2 py-0.5 rounded text-[9px] transition-colors"
+                    title="Push this week's target to Intervals.icu">
+                    Push
+                </button>
+            </div>
+        </div>`;
     });
 
     container.innerHTML = html;

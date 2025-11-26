@@ -278,6 +278,62 @@ async function pushWeeklyTargetsToIntervals() {
     }
 }
 
+async function pushSingleWeekTarget(weekIndex) {
+    const week = state.generatedPlan[weekIndex];
+    if (!week) return showToast("Error: Week not found");
+
+    if (!confirm(`Push target for Week ${week.week} to Intervals.icu?`)) return;
+
+    const btnId = `push-week-btn-${weekIndex}`;
+    const btn = document.getElementById(btnId);
+    let originalText = "";
+    if (btn) {
+        originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = "⏳";
+    }
+
+    try {
+        const isCycling = state.sportType === 'Cycling';
+        const targetType = isCycling ? "Ride" : "Run";
+
+        // Get Credentials
+        const apiKey = state.apiKey;
+        const athleteId = state.athleteId;
+
+        if (!apiKey || !athleteId) throw new Error("Missing API Key or Athlete ID");
+
+        // Calculate Date
+        const planStartInput = document.getElementById('planStartDateInput');
+        const planStartDate = planStartInput && planStartInput.value ? new Date(planStartInput.value) : new Date();
+
+        const weekStart = new Date(planStartDate);
+        weekStart.setDate(planStartDate.getDate() + ((week.week - 1) * 7));
+
+        const day = weekStart.getDay();
+        const diff = weekStart.getDate() - day + (day == 0 ? -6 : 1);
+        const monday = new Date(weekStart);
+        monday.setDate(diff);
+        const dateStr = monday.toISOString().split('T')[0];
+
+        // Get Value
+        const value = week.rawKm || week.mileage || 0;
+        if (!value) throw new Error("No target value for this week");
+
+        await createTargetPromise(apiKey, athleteId, dateStr, targetType, value);
+        showToast(`✅ Week ${week.week} target pushed!`);
+
+    } catch (e) {
+        console.error(e);
+        showToast(`❌ Error: ${e.message}`);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    }
+}
+
 async function deleteFutureTargets() {
     if (!confirm("Delete ALL future targets from today onwards? This cannot be undone.")) return;
 
