@@ -16,7 +16,7 @@ A smart, AI-powered coaching tool that generates structured training plans for C
 
 ### Option 1: The Easiest Way (GitHub Pages)
 If you just want to use the tool, go to the live website:
-**[Link to your GitHub Pages URL will go here once enabled]**
+**https://rpkranendonk.github.io/AI-cycing-and-running-plan-generator/**
 
 *(See "How to Enable GitHub Pages" below)*
 
