@@ -671,6 +671,40 @@
                         class="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold py-3.5 rounded-lg shadow-lg shadow-blue-900/20 transition-all transform hover:scale-[1.02]">
                         Save Configuration
                     </button>
+
+                    <!-- Configuration Tools -->
+                    <div class="border-t border-slate-800 pt-6 mt-6">
+                        <div class="flex items-center gap-2 text-slate-400 mb-4">
+                            <i class="fa-solid fa-toolbox"></i>
+                            <label class="text-xs font-bold uppercase tracking-wider">Configuration Tools</label>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <button onclick="exportConfiguration()"
+                                class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold py-2 rounded border border-slate-700 transition-colors">
+                                <i class="fa-solid fa-download mr-1"></i> Export Config
+                            </button>
+                            <div class="flex gap-2">
+                                <input type="text" id="importConfigInput" placeholder="Paste config string..."
+                                    class="flex-1 bg-slate-900 border border-slate-700 rounded px-2 text-xs text-white focus:border-blue-500 outline-none">
+                                <button onclick="importConfiguration()"
+                                    class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold px-3 rounded border border-slate-700 transition-colors">
+                                    <i class="fa-solid fa-upload"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Targets Management -->
+                        <div class="grid grid-cols-2 gap-3 mt-3">
+                            <button id="push-targets-btn" onclick="pushWeeklyTargetsToIntervals()"
+                                class="bg-blue-900/30 hover:bg-blue-900/50 text-blue-300 text-xs font-bold py-2 rounded border border-blue-800/50 transition-colors">
+                                <i class="fa-solid fa-bullseye mr-1"></i> Push Weekly Targets
+                            </button>
+                            <button id="delete-targets-btn" onclick="deleteFutureTargets()"
+                                class="bg-red-900/30 hover:bg-red-900/50 text-red-300 text-xs font-bold py-2 rounded border border-red-800/50 transition-colors">
+                                <i class="fa-solid fa-trash mr-1"></i> Delete Future Targets
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 

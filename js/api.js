@@ -894,3 +894,123 @@ async function deleteBlockWorkouts(weekIndices) {
     }
     showToast("✅ Block workouts deleted.");
 }
+
+async function pushWeeklyTargetsToIntervals() {
+    if (!state.generatedPlan || state.generatedPlan.length === 0) {
+        return showToast("No plan generated yet.");
+    }
+
+    if (!confirm("Push weekly targets to Intervals.icu? This will update your goals.")) return;
+
+    const pushBtn = document.getElementById('push-targets-btn');
+    if (pushBtn) { pushBtn.disabled = true; pushBtn.textContent = "Pushing..."; }
+    showToast("Pushing targets...");
+
+    try {
+        const events = [];
+        const isCycling = state.sportType === 'Cycling';
+        
+        // Use Plan Start Date if available, otherwise fallback to today/calculated dates
+        const planStartInput = document.getElementById('planStartDateInput');
+        const planStartDate = planStartInput && planStartInput.value ? new Date(planStartInput.value) : new Date();
+
+        state.generatedPlan.forEach(week => {
+            // Calculate Monday of this week
+            const weekStart = new Date(planStartDate);
+            weekStart.setDate(planStartDate.getDate() + ((week.weekNumber - 1) * 7));
+            
+            // Adjust to Monday if planStartDate is not Monday? 
+            // Actually, let's assume the plan logic aligns weeks correctly.
+            // Intervals.icu targets usually start on Monday.
+            // Let's ensure we are targeting the Monday of that week.
+            const day = weekStart.getDay();
+            const diff = weekStart.getDate() - day + (day == 0 ? -6 : 1); // adjust when day is sunday
+            const monday = new Date(weekStart.setDate(diff));
+            const dateStr = monday.toISOString().split('T')[0];
+
+            const event = {
+                category: "TARGET",
+                start_date_local: dateStr,
+                type: isCycling ? "Ride" : "Run",
+            };
+
+            if (isCycling) {
+                // Push Load (TSS)
+                event.load_target = Math.round(week.goalLoad);
+                // event.time_target = Math.round(week.goalLoad * 3600 / 50); // Rough estimate if needed
+            } else {
+                // Push Distance (meters)
+                event.distance_target = Math.round(week.goalLoad * 1000);
+            }
+
+            events.push(event);
+        });
+
+        // Bulk create
+        const response = await fetch(`https://intervals.icu/api/v1/athlete/${state.athleteId}/events/bulk?upsert=true`, {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Basic ' + btoa(`API_KEY:${state.apiKey}`),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(events)
+        });
+
+        if (!response.ok) throw new Error("API Error");
+        showToast(`✅ Pushed ${events.length} weekly targets!`);
+
+    } catch (e) {
+        console.error(e);
+        showToast(`❌ Push Error: ${e.message}`);
+    } finally {
+        if (pushBtn) { pushBtn.disabled = false; pushBtn.textContent = "🎯 Push Weekly Targets"; }
+    }
+}
+
+async function deleteFutureTargets() {
+    if (!confirm("Delete ALL future targets from today onwards? This cannot be undone.")) return;
+
+    const delBtn = document.getElementById('delete-targets-btn');
+    if (delBtn) { delBtn.disabled = true; delBtn.textContent = "Deleting..."; }
+    showToast("Deleting future targets...");
+
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        const nextYear = new Date();
+        nextYear.setFullYear(nextYear.getFullYear() + 1);
+        const nextYearStr = nextYear.toISOString().split('T')[0];
+
+        const auth = btoa(`API_KEY:${state.apiKey}`);
+        
+        // 1. Fetch Events
+        const res = await fetch(`https://intervals.icu/api/v1/athlete/${state.athleteId}/events?oldest=${today}&newest=${nextYearStr}&category=TARGET`, {
+            headers: { 'Authorization': `Basic ${auth}` }
+        });
+        
+        if (!res.ok) throw new Error("Failed to fetch targets");
+        const events = await res.json();
+        
+        const targets = events.filter(e => e.category === 'TARGET');
+        
+        if (targets.length === 0) {
+            showToast("No future targets found.");
+            return;
+        }
+
+        // 2. Delete Each
+        for (const t of targets) {
+            await fetch(`https://intervals.icu/api/v1/athlete/${state.athleteId}/events/${t.id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Basic ${auth}` }
+            });
+        }
+
+        showToast(`✅ Deleted ${targets.length} targets.`);
+
+    } catch (e) {
+        console.error(e);
+        showToast(`❌ Delete Error: ${e.message}`);
+    } finally {
+        if (delBtn) { delBtn.disabled = false; delBtn.textContent = "🗑️ Delete Future Targets"; }
+    }
+}
