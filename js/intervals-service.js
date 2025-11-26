@@ -129,6 +129,86 @@ async function deleteRemoteWorkouts(weekIndex) {
     }
 }
 
+// Helper: Create target promise for a single week
+function createTargetPromise(apiKey, athleteId, startDate, type, value) {
+    const payload = [{
+        category: "TARGET",
+        start_date_local: `${startDate}T00:00:00`,
+        type: type,
+        name: `Weekly ${type} Target`,
+        external_id: `target_${type.toLowerCase()}_${startDate}`,
+    }];
+
+    if (type === "Run") {
+        payload[0].distance_target = Math.round(value * 1000); // Convert km to meters
+    }
+    if (type === "Ride") {
+        payload[0].load_target = Math.round(value); // TSS/Load
+    }
+
+    return sendTargetPayload(apiKey, athleteId, payload, startDate, type);
+}
+
+// Helper: Delete existing targets for a specific week
+async function deleteTargetsForWeek(apiKey, athleteId, startDate, endDate, type) {
+    const auth = btoa(`API_KEY:${apiKey}`);
+
+    try {
+        const getRes = await fetch(`https://intervals.icu/api/v1/athlete/${athleteId}/events?oldest=${startDate}&newest=${endDate}&category=TARGET`, {
+            headers: { 'Authorization': `Basic ${auth}` }
+        });
+
+        if (getRes.ok) {
+            const existingEvents = await getRes.json();
+            const targetsToDelete = existingEvents.filter(e => e.category === 'TARGET' && e.type === type);
+
+            if (targetsToDelete.length > 0) {
+                console.log(`Deleting ${targetsToDelete.length} existing ${type} targets for ${startDate}...`);
+                for (const t of targetsToDelete) {
+                    await fetch(`https://intervals.icu/api/v1/athlete/${athleteId}/events/${t.id}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Basic ${auth}` }
+                    });
+                }
+            }
+        }
+    } catch (err) {
+        console.warn(`Could not delete existing targets for ${startDate}:`, err);
+    }
+}
+
+// Helper: Send target payload to Intervals.icu
+async function sendTargetPayload(apiKey, athleteId, payload, startDate, type) {
+    const auth = btoa(`API_KEY:${apiKey}`);
+
+    // Calculate week end date
+    const d = new Date(startDate);
+    const endDate = new Date(d);
+    endDate.setDate(d.getDate() + 6);
+    const endDateStr = endDate.toISOString().split('T')[0];
+
+    // 1. Delete existing targets for this week
+    await deleteTargetsForWeek(apiKey, athleteId, startDate, endDateStr, type);
+
+    // 2. Push new target
+    const response = await fetch(`https://intervals.icu/api/v1/athlete/${athleteId}/events/bulk?upsert=true`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Basic ${auth}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error('API Error Response:', errorText);
+        throw new Error(`API Error: ${response.status} - ${errorText}`);
+    }
+
+    return response;
+}
+
 async function pushWeeklyTargetsToIntervals() {
     if (!state.generatedPlan || state.generatedPlan.length === 0) {
         return showToast("No plan generated yet.");
@@ -141,60 +221,67 @@ async function pushWeeklyTargetsToIntervals() {
     showToast("Pushing targets...");
 
     try {
-        const events = [];
         const isCycling = state.sportType === 'Cycling';
+
+        // 1. Get Credentials directly from inputs (most reliable) or fallback to state
+        const apiKeyInput = document.getElementById('apiKeyInput');
+        const apiKey = apiKeyInput && apiKeyInput.value ? apiKeyInput.value.trim() : state.apiKey;
+
+        const athleteIdInput = document.getElementById('athleteIdInput');
+        let athleteId = athleteIdInput && athleteIdInput.value ? athleteIdInput.value.trim() : state.athleteId;
+
+        if (!apiKey) throw new Error("API Key is missing. Please enter it in the configuration.");
+        if (!athleteId) throw new Error("Athlete ID is missing. Please enter it next to the API Key.");
+
+        console.log(`Pushing with: AthleteID=${athleteId}, APIKey=${apiKey ? '***' : 'Missing'}`);
 
         // Use Plan Start Date if available, otherwise fallback to today/calculated dates
         const planStartInput = document.getElementById('planStartDateInput');
         const planStartDate = planStartInput && planStartInput.value ? new Date(planStartInput.value) : new Date();
 
+        // 2. Prepare promises for all weeks
+        const promises = [];
+        const targetType = isCycling ? "Ride" : "Run";
+
         state.generatedPlan.forEach(week => {
             // Calculate Monday of this week
             const weekStart = new Date(planStartDate);
-            weekStart.setDate(planStartDate.getDate() + ((week.weekNumber - 1) * 7));
+            weekStart.setDate(planStartDate.getDate() + ((week.week - 1) * 7));
 
-            // Adjust to Monday if planStartDate is not Monday? 
-            // Actually, let's assume the plan logic aligns weeks correctly.
-            // Intervals.icu targets usually start on Monday.
-            // Let's ensure we are targeting the Monday of that week.
             const day = weekStart.getDay();
             const diff = weekStart.getDate() - day + (day == 0 ? -6 : 1); // adjust when day is sunday
-            const monday = new Date(weekStart.setDate(diff));
-            const dateStr = monday.toISOString().split('T')[0];
+            const monday = new Date(weekStart);
+            monday.setDate(diff);
 
-            const event = {
-                category: "TARGET",
-                start_date_local: dateStr,
-                type: isCycling ? "Ride" : "Run",
-            };
-
-            if (isCycling) {
-                // Push Load (TSS)
-                event.load_target = Math.round(week.goalLoad);
-            } else {
-                // Push Distance (meters)
-                event.distance_target = Math.round(week.goalLoad * 1000);
+            if (isNaN(monday.getTime())) {
+                console.warn(`Skipping week ${week.week}: Invalid Date`);
+                return;
             }
 
-            events.push(event);
+            const dateStr = monday.toISOString().split('T')[0];
+
+            // Get value (km for running, TSS for cycling)
+            const value = week.rawKm || week.mileage || 0;
+            if (!value) {
+                console.warn(`Week ${week.week} missing rawKm/mileage`, week);
+                return;
+            }
+
+            // Create promise for this week's target
+            promises.push(createTargetPromise(apiKey, athleteId, dateStr, targetType, value));
         });
 
-        // Bulk create
-        const response = await fetch(`https://intervals.icu/api/v1/athlete/${state.athleteId}/events/bulk?upsert=true`, {
-            method: 'POST',
-            headers: {
-                'Authorization': 'Basic ' + btoa(`API_KEY:${state.apiKey}`),
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(events)
-        });
-
-        if (!response.ok) throw new Error("API Error");
-        showToast(`✅ Pushed ${events.length} weekly targets!`);
+        // 3. Execute all promises
+        await Promise.all(promises);
+        showToast(`✅ Pushed ${promises.length} weekly targets!`);
 
     } catch (e) {
         console.error(e);
-        showToast(`❌ Push Error: ${e.message}`);
+        if (e.message.includes("Duplicate weekly target")) {
+            showToast("❌ Duplicate target! Please delete manually on Intervals.icu.");
+        } else {
+            showToast(`❌ Push Error: ${e.message}`);
+        }
     } finally {
         if (pushBtn) { pushBtn.disabled = false; pushBtn.textContent = "🎯 Push Weekly Targets"; }
     }
@@ -303,4 +390,461 @@ function formatStepsForIntervals(steps) {
         text += line + "\n";
     });
     return text.trim();
+}
+
+// --- FETCHING & DATA LOGIC (Moved from volume.js & zones.js) ---
+
+async function fetchActivities() {
+    if (!state.apiKey) return;
+    const auth = btoa("API_KEY:" + state.apiKey);
+    const headers = { 'Authorization': `Basic ${auth}` };
+
+    // Fetch last 40 days to be safe (need 4 full weeks + current partial week)
+    const end = new Date();
+    const start = new Date();
+    start.setDate(end.getDate() - 40);
+    const oldest = start.toISOString().split('T')[0];
+    const newest = end.toISOString().split('T')[0];
+
+    try {
+        const res = await fetch(`https://intervals.icu/api/v1/athlete/${state.athleteId}/activities?oldest=${oldest}&newest=${newest}`, { headers });
+        if (!res.ok) throw new Error("Activities fetch fail");
+        const data = await res.json();
+        state.activities = data;
+        updateWeeklyVolume();
+    } catch (e) { console.error("Activities fetch error:", e); }
+}
+
+function updateWeeklyVolume() {
+    if (!state.activities || state.activities.length === 0) return;
+
+    // Helper: Get ISO Week Number
+    const getWeek = (d) => {
+        const date = new Date(d.getTime());
+        date.setHours(0, 0, 0, 0);
+        date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
+        const week1 = new Date(date.getFullYear(), 0, 4);
+        return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+    };
+
+    // Helper: Format Date DD.MM
+    const fmtDate = (dStr) => {
+        const d = new Date(dStr);
+        return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}`;
+    };
+
+    // Group activities by week (Mon-Sun)
+    // We need to identify "Last Full Week" and the 3 weeks before it.
+
+    const now = new Date();
+    const currentDay = now.getDay(); // 0=Sun, 1=Mon
+
+    // Find date of last Sunday
+    const lastSunday = new Date(now);
+    lastSunday.setDate(now.getDate() - (now.getDay() === 0 ? 7 : now.getDay()));
+    lastSunday.setHours(23, 59, 59, 999);
+
+    // Start of last full week (Monday)
+    const lastWeekStart = new Date(lastSunday);
+    lastWeekStart.setDate(lastSunday.getDate() - 6);
+    lastWeekStart.setHours(0, 0, 0, 0);
+
+    // Define the 4-week window
+    const weeks = [];
+    for (let i = 0; i < 4; i++) {
+        const end = new Date(lastSunday);
+        end.setDate(lastSunday.getDate() - (i * 7));
+
+        const start = new Date(end);
+        start.setDate(end.getDate() - 6);
+        start.setHours(0, 0, 0, 0);
+
+        weeks.push({ start, end, totalKm: 0, id: i });
+    }
+
+    // Sum distances & Collect Debug Info
+    let lastWeekActs = [];
+    let maxRunLastWeek = 0;
+
+    state.activities.forEach(act => {
+        if (act.type === 'Run') {
+            const d = new Date(act.start_date_local);
+            // Check which week bucket it falls into
+            weeks.forEach((w, index) => {
+                if (d >= w.start && d <= w.end) {
+                    const km = (act.distance || 0) / 1000;
+                    w.totalKm += km;
+                    if (index === 0) {
+                        lastWeekActs.push(km.toFixed(2));
+                        if (km > maxRunLastWeek) maxRunLastWeek = km;
+                    }
+                }
+            });
+        }
+    });
+
+    state.lastWeekLongRun = maxRunLastWeek;
+
+    // Update UI - Last Week (Index 0)
+    const lastWeek = weeks[0];
+    const weekNum = getWeek(lastWeek.start);
+    const dateRange = `${fmtDate(lastWeek.start)}-${fmtDate(lastWeek.end)}`;
+
+    const labelEl = document.getElementById('vol-last-week-label');
+    if (labelEl) labelEl.innerText = `Last Week`;
+
+    const datesEl = document.getElementById('vol-last-week-dates');
+    if (datesEl) datesEl.innerText = dateRange;
+
+    const kmEl = document.getElementById('vol-last-week-km');
+    if (kmEl) kmEl.innerText = lastWeek.totalKm.toFixed(1);
+
+    // Update UI - 4 Week Avg
+    const total4Wk = weeks.reduce((acc, curr) => acc + curr.totalKm, 0);
+    const avg4Wk = total4Wk / 4;
+
+    const avgEl = document.getElementById('vol-4wk-avg');
+    if (avgEl) avgEl.innerText = avg4Wk.toFixed(1);
+
+    // Suggested Volume
+    const baseVol = lastWeek.totalKm > 0 ? lastWeek.totalKm : avg4Wk; // Use Last Week if available, else Avg
+
+    const aggEl = document.getElementById('vol-sugg-agg');
+    if (aggEl) aggEl.innerText = (baseVol * 1.10).toFixed(1) + ' km';
+
+    const normEl = document.getElementById('vol-sugg-norm');
+    if (normEl) normEl.innerText = (baseVol * 1.075).toFixed(1) + ' km';
+
+    const easyEl = document.getElementById('vol-sugg-easy');
+    if (easyEl) easyEl.innerText = (baseVol * 1.05).toFixed(1) + ' km';
+
+    // Debug Info
+    const dbgActs = document.getElementById('dbg-last-week-acts');
+    if (dbgActs) {
+        dbgActs.innerText = lastWeekActs.length > 0 ? lastWeekActs.join(' + ') : "No runs";
+    }
+}
+
+async function fetchWellness() {
+    if (!state.apiKey) return;
+    const auth = btoa("API_KEY:" + state.apiKey);
+    const headers = { 'Authorization': `Basic ${auth}` };
+
+    const end = new Date();
+    const start = new Date();
+    start.setDate(end.getDate() - 28); // 4 weeks
+    const oldest = start.toISOString().split('T')[0];
+    const newest = end.toISOString().split('T')[0];
+
+    try {
+        const res = await fetch(`https://intervals.icu/api/v1/athlete/${state.athleteId}/wellness?oldest=${oldest}&newest=${newest}`, { headers });
+        if (!res.ok) throw new Error("Wellness fetch fail");
+        const data = await res.json();
+        state.wellness = data;
+        updateBiometrics();
+    } catch (e) { console.error("Wellness fetch error:", e); }
+}
+
+function updateBiometrics() {
+    if (!state.wellness || state.wellness.length === 0) return;
+
+    // Sort by date descending (newest first)
+    const sorted = [...state.wellness].sort((a, b) => new Date(b.id) - new Date(a.id));
+    const latest = sorted[0];
+
+    // Calculate averages (last 28 days)
+    const rhrSum = sorted.reduce((acc, curr) => acc + (curr.restingHR || 0), 0);
+    const rhrCount = sorted.filter(x => x.restingHR).length;
+    const rhrAvg = rhrCount > 0 ? Math.round(rhrSum / rhrCount) : '--';
+
+    const hrvSum = sorted.reduce((acc, curr) => acc + (curr.hrv || 0), 0);
+    const hrvCount = sorted.filter(x => x.hrv).length;
+    const hrvAvg = hrvCount > 0 ? Math.round(hrvSum / hrvCount) : '--';
+
+    // Update UI
+    const rhrEl = document.getElementById('bio-rhr');
+    if (rhrEl) rhrEl.innerHTML = `${latest.restingHR || '--'} <span class="text-[10px] text-slate-500 font-normal">/ ${rhrAvg} avg</span>`;
+
+    const hrvEl = document.getElementById('bio-hrv');
+    if (hrvEl) hrvEl.innerHTML = `${latest.hrv || '--'} <span class="text-[10px] text-slate-500 font-normal">/ ${hrvAvg} avg</span>`;
+}
+
+async function fetchZones() {
+    if (!state.apiKey) return;
+    const auth = btoa("API_KEY:" + state.apiKey);
+    const headers = { 'Authorization': `Basic ${auth}` };
+
+    try {
+        const res = await fetch(`https://intervals.icu/api/v1/athlete/${state.athleteId}`, { headers });
+        if (!res.ok) throw new Error("Settings fetch fail");
+        const data = await res.json();
+
+        if (data.sportSettings) {
+            const runSettings = data.sportSettings.find(s => s.types.includes('Run'));
+            if (runSettings) {
+                state.fetchedZones = {
+                    hr: runSettings.hr_zones || [],
+                    pace: runSettings.pace_zones || []
+                };
+
+                // Display Raw HR Data
+                const rawHrEl = document.getElementById('rawHrOutput');
+                if (rawHrEl) {
+                    rawHrEl.innerText = JSON.stringify(runSettings.hr_zones, null, 2);
+                }
+
+                // Display Raw Pace Data
+                const rawPaceEl = document.getElementById('rawPaceOutput');
+                if (rawPaceEl) {
+                    rawPaceEl.innerText = JSON.stringify(runSettings.pace_zones, null, 2);
+                }
+
+                const srcEl = document.getElementById('zoneSource');
+                if (srcEl) srcEl.innerText = "Synced: Intervals.icu";
+
+                if (runSettings.lthr) state.lthrBpm = runSettings.lthr;
+                if (runSettings.threshold_pace) {
+                    state.thresholdSpeed = runSettings.threshold_pace;
+                    let val = runSettings.threshold_pace;
+                    let sec = (val < 20) ? (1000 / val) : val;
+                    state.lthrPace = secondsToTime(sec);
+                }
+            }
+        }
+    } catch (e) { console.error("Zone fetch error:", e); }
+}
+
+function calculateZones() {
+    let zones = { z1: "--", z2: "--", z3: "--", z4: "--", z5: "--" };
+    const fmt = secondsToTime;
+
+    // --- PACE ZONES (Existing Logic) ---
+    if (state.fetchedZones && state.fetchedZones.pace && state.fetchedZones.pace.length > 0) {
+        let p = state.fetchedZones.pace;
+        let cleanPace = p.map(x => (typeof x === 'object' && x.min) ? x.min : x);
+
+        // Detect Percentage (Values 60-130) vs Absolute
+        const isPercentage = cleanPace.some(x => x > 60 && x < 130) && state.thresholdSpeed;
+        let pSec = [];
+
+        if (isPercentage && state.thresholdSpeed) {
+            // 1. DISPLAY LOGIC (Absolute Times)
+            pSec = cleanPace.map(pct => {
+                if (pct > 500) return 0;
+                const speedMs = (pct / 100) * state.thresholdSpeed;
+                return 1000 / speedMs;
+            });
+
+            // 2. EXPORT LOGIC (Percentages)
+            if (cleanPace.length >= 4) {
+                state.zonePcts = {
+                    z2: `${cleanPace[0]}-${cleanPace[1]}% Pace`,
+                    z3: `${cleanPace[1]}-${cleanPace[2]}% Pace`,
+                    z5: `${cleanPace[3]}-115% Pace`
+                };
+            }
+
+        } else {
+            // Absolute Mode Fallback
+            pSec = cleanPace.map(val => {
+                if (val === 0 || val > 900) return 0;
+                if (val < 25) return (1000 / val);
+                return val;
+            });
+            pSec = pSec.map(x => x === 0 || x === Infinity ? 99999 : x);
+            pSec.sort((a, b) => b - a); // Slow -> Fast
+            const v = pSec.filter(x => x < 50000);
+
+            if (v.length >= 4) {
+                state.zonePcts = {
+                    z2: `${fmt(v[0])}-${fmt(v[1])}`,
+                    z3: `${fmt(v[1])}-${fmt(v[2])}`,
+                    z5: `${fmt(v[3])}-${fmt(v[3] * 0.95)}`
+                };
+            }
+        }
+
+        // DISPLAY LOGIC CONTINUED
+        pSec = pSec.map(x => x === 0 || x === Infinity ? 99999 : x);
+        pSec.sort((a, b) => b - a);
+        const validSecs = pSec.filter(x => x < 50000);
+
+        if (validSecs.length >= 4) {
+            zones.z1 = `> ${fmt(validSecs[0])}`;
+            zones.z2 = `${fmt(validSecs[0])} - ${fmt(validSecs[1])}`;
+            zones.z3 = `${fmt(validSecs[1])} - ${fmt(validSecs[2])}`;
+            zones.z4 = `${fmt(validSecs[2])} - ${fmt(validSecs[3])}`;
+            zones.z5 = `< ${fmt(validSecs[3])}`;
+        }
+    } else {
+        // Fallback Pace
+        const lthrSec = timeToSeconds(state.lthrPace);
+        if (lthrSec > 0) {
+            zones.z1 = `${fmt(lthrSec * 1.29)}+`;
+            zones.z2 = `${fmt(lthrSec * 1.14)}-${fmt(lthrSec * 1.29)}`;
+            zones.z3 = `${fmt(lthrSec * 1.06)}-${fmt(lthrSec * 1.13)}`;
+            zones.z4 = `${fmt(lthrSec * 1.00)}-${fmt(lthrSec * 1.05)}`;
+            zones.z5 = `<${fmt(lthrSec * 0.98)}`;
+        }
+    }
+
+
+    // Update Debugger
+    document.getElementById('dbg-z2').innerText = state.zonePcts.z2;
+    document.getElementById('dbg-z5').innerText = state.zonePcts.z5;
+
+    // Update LT Threshold Display
+    const ltPaceEl = document.getElementById('disp-lthr-pace');
+    const ltBpmEl = document.getElementById('disp-lthr-bpm');
+    if (ltPaceEl) ltPaceEl.innerText = state.lthrPace || "--:--";
+    if (ltBpmEl) ltBpmEl.innerText = state.lthrBpm || "--";
+    const lthrPaceDisplay = document.getElementById('inputLthrPaceDisplay');
+    if (lthrPaceDisplay) lthrPaceDisplay.innerText = state.lthrPace || "--";
+
+
+    // Update Table
+    state.zones = zones;
+    const tbody = document.getElementById('zoneTableBody');
+    if (tbody) {
+        tbody.innerHTML = ''; // Clear existing
+
+        // --- HR ZONES (Joe Friel Logic) ---
+        let hrZones = [];
+        let rhr = 30;
+        if (state.wellness && state.wellness.length > 0) {
+            const sorted = [...state.wellness].sort((a, b) => new Date(b.id) - new Date(a.id));
+            if (sorted[0].restingHR) rhr = sorted[0].restingHR;
+        }
+
+        const zoneNames = [
+            "Z1 Rec",
+            "Z2 End",
+            "Z3 Tmp",
+            "Z4 Thr",
+            "Z5a Sup",
+            "Z5b VO2",
+            "Z5c Ana"
+        ];
+
+        const getZoneStyle = (i) => {
+            if (i <= 1) return { bg: 'bg-green-900/20', border: 'border-green-500', text: 'text-green-200' }; // Z1, Z2
+            if (i <= 3) return { bg: 'bg-orange-900/20', border: 'border-orange-500', text: 'text-orange-200' }; // Z3, Z4
+            return { bg: 'bg-red-900/20', border: 'border-red-500', text: 'text-red-200' }; // Rest
+        };
+
+        if (state.fetchedZones && state.fetchedZones.hr && state.fetchedZones.hr.length > 0) {
+            const h = state.fetchedZones.hr;
+            let start = rhr;
+            h.forEach((endPoint, i) => {
+                const style = getZoneStyle(i);
+                hrZones.push({
+                    name: zoneNames[i] || `Z${i + 1}`,
+                    range: `${start} - ${endPoint}`,
+                    colorClass: `${style.bg} border-l-4 ${style.border}`,
+                    textClass: style.text
+                });
+                start = endPoint + 1;
+            });
+        } else {
+            // Fallback HR
+            const lthr = parseInt(state.lthrBpm) || 170;
+            // Standard 5 zones fallback
+            const fallbackRanges = [
+                `<${Math.round(lthr * 0.81)}`,
+                `${Math.round(lthr * 0.81)}-${Math.round(lthr * 0.89)}`,
+                `${Math.round(lthr * 0.90)}-${Math.round(lthr * 0.93)}`,
+                `${Math.round(lthr * 0.94)}-${Math.round(lthr * 0.99)}`,
+                `>${lthr}`
+            ];
+
+            fallbackRanges.forEach((range, i) => {
+                const style = getZoneStyle(i);
+                hrZones.push({
+                    name: zoneNames[i] || `Z${i + 1}`,
+                    range: range,
+                    colorClass: `${style.bg} border-l-4 ${style.border}`,
+                    textClass: style.text
+                });
+            });
+        }
+
+        // --- PACE ZONES (Dynamic Logic) ---
+        let paceZones = [];
+        if (state.fetchedZones && state.fetchedZones.pace && state.fetchedZones.pace.length > 0) {
+            let p = state.fetchedZones.pace;
+            let cleanPace = p.map(x => (typeof x === 'object' && x.min) ? x.min : x);
+
+            // Convert to seconds if percentage
+            const isPercentage = cleanPace.some(x => x > 60 && x < 130) && state.thresholdSpeed;
+            let pSec = [];
+            if (isPercentage && state.thresholdSpeed) {
+                pSec = cleanPace.map(pct => {
+                    if (pct > 500) return 0;
+                    const speedMs = (pct / 100) * state.thresholdSpeed;
+                    return 1000 / speedMs;
+                });
+            } else {
+                pSec = cleanPace.map(val => {
+                    if (val === 0 || val > 900) return 0;
+                    if (val < 25) return (1000 / val);
+                    return val;
+                });
+            }
+
+            // Sort Slow -> Fast (Largest Sec -> Smallest Sec)
+            pSec = pSec.map(x => x === 0 || x === Infinity ? 99999 : x);
+            pSec.sort((a, b) => b - a);
+            const validSecs = pSec.filter(x => x < 50000);
+
+            // Generate Zones
+            // Z1: > Num1
+            // Z2: Num1 - Num2
+            // ...
+            if (validSecs.length > 0) {
+                let startStr = `> ${fmt(validSecs[0])}`;
+                paceZones.push(startStr);
+
+                for (let i = 0; i < validSecs.length - 1; i++) {
+                    paceZones.push(`${fmt(validSecs[i])} - ${fmt(validSecs[i + 1])}`);
+                }
+
+                // Last Zone: < Last Num
+                paceZones.push(`< ${fmt(validSecs[validSecs.length - 1])}`);
+            }
+        } else {
+            // Fallback Pace
+            paceZones = [zones.z1, zones.z2, zones.z3, zones.z4, zones.z5];
+        }
+
+
+        // Render Table (Merge HR and Pace)
+        // Render Table (Merge HR and Pace)
+        const maxRows = Math.max(hrZones.length, paceZones.length);
+        for (let i = 0; i < maxRows; i++) {
+            const hrz = hrZones[i] || { name: `Z${i + 1}`, range: '--', colorClass: '', textClass: '' };
+            const paceRange = paceZones[i] || '--';
+
+            // Use HR color/name if available, else generic
+            // Apply new color coding logic here
+            let colorClass = hrz.colorClass || "border-b border-slate-800 last:border-0";
+
+            if (!hrz.colorClass) {
+                if (i === 0 || i === 1) colorClass += " bg-green-900/10 text-green-200"; // Z1, Z2
+                else if (i === 2 || i === 3) colorClass += " bg-yellow-900/10 text-yellow-200"; // Z3, Z4
+                else colorClass += " bg-red-900/10 text-red-200"; // Z5+
+            }
+
+            const name = hrz.name;
+            const hrRange = hrz.range;
+
+            const row = `
+                <tr class="${colorClass}">
+                    <td class="${hrz.textClass || 'font-bold'} px-2 py-1">${name}</td>
+                    <td class="px-2 py-1 font-mono text-right">${paceRange}</td>
+                    <td class="px-2 py-1 font-mono text-right">${hrRange}</td>
+                </tr>
+            `;
+            tbody.innerHTML += row;
+        }
+    }
 }

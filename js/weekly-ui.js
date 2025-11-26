@@ -402,3 +402,76 @@ function displayMockWorkouts(weekIndex, availability) {
 
     container.innerHTML = html;
 }
+
+/**
+ * Renders the weekly plan to the UI
+ */
+function renderWeeklyPlan() {
+    const container = document.getElementById('weekly-plan-container');
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    if (!state.generatedPlan || state.generatedPlan.length === 0) {
+        container.innerHTML = '<div class="text-center text-slate-500 p-8">No plan generated yet. Configure your settings to get started.</div>';
+        return;
+    }
+
+    state.generatedPlan.forEach((week, index) => {
+        const weekCard = document.createElement('div');
+        weekCard.className = 'bg-slate-800/50 rounded-xl border border-slate-700 p-4 transition-all hover:border-slate-600';
+        weekCard.dataset.weekIndex = index;
+
+        // Determine Phase Color
+        let phaseColor = 'text-slate-400';
+        let phaseBg = 'bg-slate-700/50';
+        let phaseBorder = 'border-slate-600';
+
+        if (week.phaseName.includes('Base')) { phaseColor = 'text-blue-400'; phaseBg = 'bg-blue-900/20'; phaseBorder = 'border-blue-500/30'; }
+        else if (week.phaseName.includes('Build')) { phaseColor = 'text-green-400'; phaseBg = 'bg-green-900/20'; phaseBorder = 'border-green-500/30'; }
+        else if (week.phaseName.includes('Peak')) { phaseColor = 'text-purple-400'; phaseBg = 'bg-purple-900/20'; phaseBorder = 'border-purple-500/30'; }
+        else if (week.phaseName.includes('Taper')) { phaseColor = 'text-yellow-400'; phaseBg = 'bg-yellow-900/20'; phaseBorder = 'border-yellow-500/30'; }
+        else if (week.phaseName.includes('Race')) { phaseColor = 'text-red-400'; phaseBg = 'bg-red-900/20'; phaseBorder = 'border-red-500/30'; }
+        else if (week.weekName.includes('Recovery')) { phaseColor = 'text-teal-400'; phaseBg = 'bg-teal-900/20'; phaseBorder = 'border-teal-500/30'; }
+
+        // Header Section
+        const headerHtml = `
+            <div class="flex items-center justify-between cursor-pointer" onclick="toggleWeekDetail(${index})">
+                <div class="flex items-center gap-4">
+                    <div class="flex flex-col items-center justify-center w-12 h-12 rounded-lg ${phaseBg} ${phaseBorder} border">
+                        <span class="text-xs text-slate-400 uppercase">Week</span>
+                        <span class="text-lg font-bold ${phaseColor}">${week.week}</span>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 class="font-bold text-slate-200">${week.phaseName}</h3>
+                            <span class="text-xs px-2 py-0.5 rounded-full ${phaseBg} ${phaseColor} border ${phaseBorder}">${week.focus}</span>
+                        </div>
+                        <div class="text-xs text-slate-500 mt-0.5 flex items-center gap-2">
+                            <span><i class="fa-regular fa-calendar mr-1"></i> ${week.date}</span>
+                            <span>•</span>
+                            <span>${week.weekName}</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex items-center gap-6">
+                    <div class="text-right">
+                        <div class="text-xs text-slate-500 uppercase tracking-wider">Volume</div>
+                        <div class="font-mono font-bold text-slate-200">${week.mileage} <span class="text-xs text-slate-500">km</span></div>
+                    </div>
+                    <div class="text-right hidden sm:block">
+                        <div class="text-xs text-slate-500 uppercase tracking-wider">Long Run</div>
+                        <div class="font-mono font-bold text-slate-200">${week.longRun} <span class="text-xs text-slate-500">km</span></div>
+                    </div>
+                    <div class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-700/50 text-slate-400 hover:bg-slate-700 hover:text-white transition-colors">
+                        <i class="fa-solid fa-chevron-down transition-transform duration-300" id="chevron-${index}"></i>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        weekCard.innerHTML = headerHtml;
+        container.appendChild(weekCard);
+    });
+}

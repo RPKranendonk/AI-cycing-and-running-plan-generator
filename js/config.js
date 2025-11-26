@@ -13,7 +13,9 @@ let state = {
     trainingHistory: localStorage.getItem('elite_trainingHistory') || '',
     injuries: localStorage.getItem('elite_injuries') || '',
     gymAccess: localStorage.getItem('elite_gymAccess') || 'none',
+    gymAccess: localStorage.getItem('elite_gymAccess') || 'none',
     trainingPreferences: localStorage.getItem('elite_trainingPreferences') || '',
+    currentFitness: localStorage.getItem('elite_currentFitness') || '',
 
     lthrPace: localStorage.getItem('elite_lthrPace') || '',
     lthrBpm: localStorage.getItem('elite_lthrBpm') || '',
