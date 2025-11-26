@@ -771,7 +771,6 @@ function generateProgressionCalendar(startVol, startLR, raceDateStr) {
             startLongRide,
             longRideCap,
             totalWeeks,
-            totalWeeks,
             state.customRestWeeks || [],
             taperDuration,
             state.forceBuildWeeks || [],

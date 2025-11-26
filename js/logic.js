@@ -612,94 +612,67 @@ function calculateAdvancedCyclingPlan(startFitness, targetRampRate, longRideStar
         let longRideDuration = 0;
         let longRideLoad = 0;
 
-        // Determine Week Type in Block (1, 2, 3, 4=Recovery)
-        // If we just finished recovery, we are at Week 1 (Post-Recovery)
-        const isPostRecovery = (plan.length > 0 && plan[plan.length - 1].isRecovery && !isRecovery && !isTaper);
+        // Determine Week Type in Block based on previous week
+        const prevWeek = plan.length > 0 ? plan[plan.length - 1] : null;
+        const isPostRecovery = prevWeek && prevWeek.isRecovery && !isRecovery && !isTaper;
 
         if (isTaper) {
             weekName = "Taper Week";
             phase = "Taper";
-            // Taper Logic: Drop volume
-            const prevLoad = plan.length > 0 ? plan[plan.length - 1].goalLoad : (startFitness * 7);
+            // Taper: Drop volume based on weeks out (similar to running)
+            // But here we just use fixed 65% for the 1 week taper
+            const prevLoad = prevWeek ? prevWeek.goalLoad : (startFitness * 7);
             goalLoad = prevLoad * 0.65;
-
-            // Taper Long Ride
             longRideDuration = currentLongRideDuration * 0.60;
-
-            // Fitness maintenance
-            currentFitness -= 1;
-
+            currentFitness -= 1; // Slight decay
         } else if (isRecovery) {
             weekName = "Recovery Week";
             phase = "Recovery";
 
-            // Recovery Logic:
-            // Goal Load = 60% of peakLoad (60% of previous week, which was Week 3)
-            // If peakLoad isn't set (e.g. forced early recovery), use previous week
-            const refLoad = peakLoad > 0 ? peakLoad : (plan.length > 0 ? plan[plan.length - 1].goalLoad : startFitness * 7);
-            goalLoad = refLoad * 0.60;
+            // Recovery Logic (Matches Running):
+            // Drop load to 60% of CURRENT fitness capacity
+            // Do NOT decay currentFitness here, so we can resume from it
+            const baseLoad = 7 * currentFitness;
+            goalLoad = baseLoad * 0.60;
 
-            // Decay Fitness by 2 points
-            currentFitness -= 2;
-
-            // Long Ride: Cut by 50% on Recovery weeks
+            // Long Ride: Cut by 50%
             longRideDuration = currentLongRideDuration * 0.50;
-
-            weeksSinceLastRecovery = 0; // Reset counter
-
-        } else if (isPostRecovery) {
-            weekName = "Build Week (Post-Recovery)";
-            phase = "Build";
-
-            // Post-Recovery Logic (Week 5, 9, etc.):
-            // Set goalLoad to 0.85 * peakLoad (reset to 85% of previous block's peak)
-            // If peakLoad is missing (first block?), use standard calc? 
-            // Actually first block starts at week 1, which is not post-recovery (no prev recovery).
-            // So this only applies from Block 2 onwards.
-
-            if (peakLoad > 0) {
-                goalLoad = 0.85 * peakLoad;
-                // Update currentFitness based on this load
-                // Formula: goalLoad = 7 * (currentFitness + (6 * targetRampRate))
-                // So: currentFitness = (goalLoad / 7) - (6 * targetRampRate)
-                currentFitness = (goalLoad / 7) - (6 * targetRampRate);
-            } else {
-                // Fallback if weird state
-                goalLoad = 7 * (currentFitness + (6 * targetRampRate));
-                currentFitness += targetRampRate;
-            }
-
-            // Long Ride: Hold steady on Post-Recovery weeks
-            // (Do not increment currentLongRideDuration)
-            longRideDuration = currentLongRideDuration;
-
-            weeksSinceLastRecovery++;
 
         } else {
             weekName = "Build Week";
             phase = "Build";
 
-            // Normal Loading Weeks:
-            // Calculate goalLoad = 7 * (currentFitness + (6 * targetRampRate))
-            goalLoad = 7 * (currentFitness + (6 * targetRampRate));
+            if (isPostRecovery) {
+                // RESTART LOGIC (Matches Running):
+                // Reduce Fitness slightly to account for the rest week
+                // Running uses: currentCapacity * (1 - progressionRate)
+                // We'll use a fixed factor or the ramp rate logic inverted
+                // Let's step back 1 week of fitness? Or just hold steady?
+                // Running: currentCapacity = currentCapacity * (1 - progressionRate);
+                // Cycling equivalent: currentFitness -= targetRampRate;
+                currentFitness -= targetRampRate; // Step back slightly
 
-            // Increment Fitness by ramp rate
-            currentFitness += targetRampRate;
+                // Long Ride: Step back slightly too? Running does.
+                // Running: currentLongRun = currentLongRun - longRunProgression;
+                // Cycling: currentLongRideDuration -= 0.5;
+                currentLongRideDuration = Math.max(longRideStartHours, currentLongRideDuration - 0.5);
+                longRideDuration = currentLongRideDuration;
 
-            // Long Ride Progression:
-            // Add 0.5 hours per loading week (capped)
-            currentLongRideDuration = Math.min(currentLongRideDuration + 0.5, longRideCapHours);
-            longRideDuration = currentLongRideDuration;
+            } else {
+                // NORMAL PROGRESSION (Matches Running)
+                // Increase Fitness
+                currentFitness += targetRampRate;
 
-            weeksSinceLastRecovery++;
+                // Increase Long Ride
+                if (week > 1) {
+                    currentLongRideDuration = Math.min(currentLongRideDuration + 0.5, longRideCapHours);
+                }
+                longRideDuration = currentLongRideDuration;
+            }
+
+            // Calculate Load based on updated Fitness
+            goalLoad = 7 * currentFitness;
         }
-
-        // Update Peak Load if this is the 3rd week of the block (weeksSinceLastRecovery === 3)
-        // Note: weeksSinceLastRecovery was just incremented for load weeks.
-        if (weeksSinceLastRecovery === 3 && !isRecovery && !isTaper) {
-            peakLoad = goalLoad;
-        }
-
         // Calculate Long Ride Load
         // Formula: durationHours * 100 * 0.65^2 (assuming 0.65 IF)
         longRideLoad = longRideDuration * 100 * Math.pow(0.65, 2);
