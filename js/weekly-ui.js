@@ -407,7 +407,7 @@ function displayMockWorkouts(weekIndex, availability) {
  * Renders the weekly plan to the UI
  */
 function renderWeeklyPlan() {
-    const container = document.getElementById('weekly-plan-container');
+    const container = document.getElementById('planContainer');
     if (!container) return;
 
     container.innerHTML = '';
