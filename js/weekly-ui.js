@@ -139,9 +139,9 @@ function toggleWeekDetail(weekIndex) {
         html += '<div class="space-y-2">';
         html += '<div class="text-xs text-slate-500 mb-1">Week options: (we recommend building your plan per block and not per week!), </div>';
         html += `<div class="flex gap-2">
-                    <button onclick="prepareWeekPlanWithAI(${weekIndex}); event.stopPropagation();"
-                            class="flex-1 bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 text-[10px] font-bold py-1.5 rounded border border-blue-500/30 transition-colors">
-                        Update week
+                    <button onclick="preparePlanWithAI('week', [${weekIndex}]); event.stopPropagation();" 
+                        class="bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 text-xs font-bold py-1.5 px-3 rounded border border-blue-500/30 transition-colors flex items-center gap-2">
+                        <i class="fa-solid fa-robot"></i> Prepare Week Plan
                     </button>
                     <button onclick="pushToIntervalsICU(${weekIndex}); event.stopPropagation();" 
                             id="push-btn-${weekIndex}"

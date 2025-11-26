@@ -161,7 +161,7 @@ function renderWeeklyPlan() {
                 
                 <!-- Block Actions -->
                 <div class="space-y-2" onclick="event.stopPropagation()">
-                    <button onclick="prepareBlockPlanWithAI(${blockNum}, [${blockWeeks.map(w => w.week - 1).join(',')}])" 
+                    <button onclick="preparePlanWithAI('block', [${blockWeeks.map(w => w.week - 1).join(',')}])" 
                             class="w-full bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 text-[10px] font-bold py-1.5 rounded border border-blue-500/30 transition-colors">
                         <i class="fa-solid fa-robot"></i> AI Plan
                     </button>
