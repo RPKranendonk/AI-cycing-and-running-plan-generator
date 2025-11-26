@@ -139,28 +139,33 @@ function createTargetPromise(apiKey, athleteId, startDate, type, value) {
         external_id: `target_${type.toLowerCase()}_${startDate}`,
     }];
 
-    if (type === "Run") {
-        payload[0].distance_target = Math.round(value * 1000); // Convert km to meters
-    }
-    if (type === "Ride") {
-        payload[0].load_target = Math.round(value); // TSS/Load
-    }
+    if (type === "Run") payload[0].distance_target = Math.round(value * 1000);
+    if (type === "Ride") payload[0].load_target = value;
 
-    return sendTargetPayload(apiKey, athleteId, payload, startDate, type);
+    return sendTargetPayload(apiKey, athleteId, payload, type === "Run" ? "Run" : "Cycling");
 }
 
-// Helper: Delete existing targets for a specific week
-async function deleteTargetsForWeek(apiKey, athleteId, startDate, endDate, type) {
+// Helper: Send target payload to Intervals.icu (Matches test page logic)
+async function sendTargetPayload(apiKey, athleteId, payload, type) {
     const auth = btoa(`API_KEY:${apiKey}`);
 
+    // Calculate week start/end dates for deletion
+    const startDate = payload[0].start_date_local.split('T')[0];
+    const d = new Date(startDate);
+    const endDate = new Date(d);
+    endDate.setDate(d.getDate() + 6);
+    const endDateStr = endDate.toISOString().split('T')[0];
+
+    // 1. Delete existing targets for this week
     try {
-        const getRes = await fetch(`https://intervals.icu/api/v1/athlete/${athleteId}/events?oldest=${startDate}&newest=${endDate}&category=TARGET`, {
+        const getRes = await fetch(`https://intervals.icu/api/v1/athlete/${athleteId}/events?oldest=${startDate}&newest=${endDateStr}&category=TARGET`, {
             headers: { 'Authorization': `Basic ${auth}` }
         });
 
         if (getRes.ok) {
             const existingEvents = await getRes.json();
-            const targetsToDelete = existingEvents.filter(e => e.category === 'TARGET' && e.type === type);
+            const targetType = payload[0].type;
+            const targetsToDelete = existingEvents.filter(e => e.category === 'TARGET' && e.type === targetType);
 
             if (targetsToDelete.length > 0) {
                 console.log(`Deleting ${targetsToDelete.length} existing ${type} targets for ${startDate}...`);
@@ -173,22 +178,8 @@ async function deleteTargetsForWeek(apiKey, athleteId, startDate, endDate, type)
             }
         }
     } catch (err) {
-        console.warn(`Could not delete existing targets for ${startDate}:`, err);
+        console.warn("Error deleting existing targets:", err);
     }
-}
-
-// Helper: Send target payload to Intervals.icu
-async function sendTargetPayload(apiKey, athleteId, payload, startDate, type) {
-    const auth = btoa(`API_KEY:${apiKey}`);
-
-    // Calculate week end date
-    const d = new Date(startDate);
-    const endDate = new Date(d);
-    endDate.setDate(d.getDate() + 6);
-    const endDateStr = endDate.toISOString().split('T')[0];
-
-    // 1. Delete existing targets for this week
-    await deleteTargetsForWeek(apiKey, athleteId, startDate, endDateStr, type);
 
     // 2. Push new target
     const response = await fetch(`https://intervals.icu/api/v1/athlete/${athleteId}/events/bulk?upsert=true`, {

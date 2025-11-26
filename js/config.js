@@ -9,7 +9,6 @@ let state = {
     geminiApiKey: localStorage.getItem('elite_geminiApiKey') || '',
     aiProvider: localStorage.getItem('elite_aiProvider') || 'openai',
     athleteId: localStorage.getItem('elite_athleteId') || '0',
-    proxyUrl: localStorage.getItem('elite_proxyUrl') || 'https://intervals-proxy.rpkranendonk.workers.dev', // Cloudflare Worker URL
     // Profile
     trainingHistory: localStorage.getItem('elite_trainingHistory') || '',
     injuries: localStorage.getItem('elite_injuries') || '',
