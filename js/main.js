@@ -5,6 +5,36 @@ async function fetchData(showMsg = false) {
     const headers = { 'Authorization': `Basic ${auth}` };
     try {
         if (showMsg) showToast("Fetching...");
+
+        // Ensure we have a valid Athlete ID
+        if (!state.athleteId || state.athleteId === '0' || state.athleteId === 0) {
+            try {
+                // Fetch self/current athlete using ID '0' (Intervals.icu convention for 'me')
+                const res = await fetch(`https://intervals.icu/api/v1/athlete/0`, { headers });
+                if (res.ok) {
+                    const data = await res.json();
+                    state.athleteId = data.id;
+                    state.athleteName = `${data.firstname} ${data.lastname}`;
+
+                    // Update UI inputs
+                    if (document.getElementById('athleteIdInput')) document.getElementById('athleteIdInput').value = state.athleteId;
+
+                    // Update Connection Status if visible
+                    const statusBox = document.getElementById('connectionStatus');
+                    if (statusBox) {
+                        statusBox.classList.remove('hidden');
+                        statusBox.innerHTML = `
+                            <div class="space-y-1">
+                                <div class="text-green-400 font-bold"><i class="fa-solid fa-check"></i> Connected as ${state.athleteName}</div>
+                            </div>
+                        `;
+                    }
+                }
+            } catch (err) {
+                console.warn("Could not auto-fetch athlete ID:", err);
+            }
+        }
+
         if (!state.fetchedZones) await fetchZones();
         await fetchWellness();
         await fetchActivities();
