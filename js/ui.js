@@ -774,7 +774,8 @@ function generateProgressionCalendar(startVol, startLR, raceDateStr) {
             totalWeeks,
             state.customRestWeeks || [],
             taperDuration,
-            state.forceBuildWeeks || []
+            state.forceBuildWeeks || [],
+            startWithRestWeek
         );
 
         // Map to UI structure

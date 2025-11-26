@@ -514,7 +514,8 @@ function generateTrainingPlan() {
             totalWeeks,
             options.customRestWeeks,
             options.taperDuration || 1,
-            options.forceBuildWeeks || []
+            options.forceBuildWeeks || [],
+            options.startWithRestWeek
         );
 
         // Map advanced plan to existing structure for UI compatibility
@@ -559,6 +560,7 @@ function generateTrainingPlan() {
  * Advanced Cycling Coaching Engine
  * Generates a weekly training schedule using Intervals.icu terminology.
  * 
+ *
  * @param {number} startFitness - Starting CTL (e.g., 40)
  * @param {number} targetRampRate - Desired weekly ramp rate (e.g., 3, 5, 7)
  * @param {number} longRideStartHours - Starting duration for long ride (e.g., 1.5)
@@ -567,9 +569,10 @@ function generateTrainingPlan() {
  * @param {Array} customRestWeeks - Array of week numbers to force as recovery
  * @param {number} taperDuration - Number of taper weeks (1 or 2)
  * @param {Array} forceBuildWeeks - Array of week numbers to force as build (skip recovery)
+ * @param {boolean} startWithRestWeek - Whether to start with a recovery week
  * @returns {Array} Array of weekly plan objects
  */
-function calculateAdvancedCyclingPlan(startFitness, targetRampRate, longRideStartHours, longRideCapHours, totalWeeks, customRestWeeks = [], taperDuration = 1, forceBuildWeeks = []) {
+function calculateAdvancedCyclingPlan(startFitness, targetRampRate, longRideStartHours, longRideCapHours, totalWeeks, customRestWeeks = [], taperDuration = 1, forceBuildWeeks = [], startWithRestWeek = false) {
     // Safety Checks for Arrays
     if (!Array.isArray(customRestWeeks)) customRestWeeks = [];
     if (!Array.isArray(forceBuildWeeks)) forceBuildWeeks = [];
@@ -581,8 +584,6 @@ function calculateAdvancedCyclingPlan(startFitness, targetRampRate, longRideStar
     let currentLongRideDuration = Math.max(longRideStartHours, 2.0);
 
     // Cycle: 4 weeks (3 Load : 1 Recovery)
-    const cycleLength = 4;
-    let weeksSinceLastRecovery = 0;
     let peakLoad = 0; // Store load of the 3rd week of every block
 
     for (let week = 1; week <= totalWeeks; week++) {
@@ -594,15 +595,14 @@ function calculateAdvancedCyclingPlan(startFitness, targetRampRate, longRideStar
 
         if (customRestWeeks.includes(week)) {
             isRecovery = true;
+        } else if (forceBuildWeeks.includes(week)) {
+            isRecovery = false;
         } else if (!isTaper) {
-            // Natural Cycle: If 3 load weeks have passed, next is recovery
-            // UNLESS forced to build
-            if (weeksSinceLastRecovery >= 3) {
-                if (forceBuildWeeks.includes(week)) {
-                    isRecovery = false;
-                } else {
-                    isRecovery = true;
-                }
+            // Fixed 4-Week Cycle Logic (Matches Running)
+            if (startWithRestWeek) {
+                if ((week - 1) % 4 === 0) isRecovery = true;
+            } else {
+                if (week % 4 === 0) isRecovery = true;
             }
         }
 
