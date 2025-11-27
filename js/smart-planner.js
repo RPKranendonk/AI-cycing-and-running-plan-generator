@@ -72,8 +72,8 @@ async function calculateSmartBlock() {
 
         if (targetActivities.length === 0) {
             document.getElementById('weekly-breakdown').textContent = `No ${isCycling ? 'cycling' : 'running'} activities found in the last 4 full weeks.`;
-            document.getElementById('target-volume').value = 0;
-            document.getElementById('target-long-run').value = 0;
+            if (document.getElementById('target-volume')) document.getElementById('target-volume').value = 0;
+            if (document.getElementById('target-long-run')) document.getElementById('target-long-run').value = 0;
             showToast(`⚠️ No ${isCycling ? 'cycling' : 'running'} data found`);
             return;
         }
@@ -218,8 +218,8 @@ async function calculateSmartBlock() {
             const aggressiveLRRaw = aggressiveVol * 0.30;
             const aggressiveLR = (Math.ceil(aggressiveLRRaw * 2) / 2).toFixed(1);
 
-            document.getElementById('target-volume').value = aggressiveVol;
-            document.getElementById('target-long-run').value = aggressiveLR;
+            if (document.getElementById('target-volume')) document.getElementById('target-volume').value = aggressiveVol;
+            if (document.getElementById('target-long-run')) document.getElementById('target-long-run').value = aggressiveLR;
         }
 
         // Rest Week Logic (Simplified for now, just check avg increase)
@@ -268,18 +268,19 @@ async function calculateSmartBlock() {
             const lrInput = document.getElementById('target-long-run');
 
             checkbox.checked = true;
-            volInput.value = conservativeVol;
-            lrInput.value = conservativeLR;
+            if (volInput) volInput.value = conservativeVol;
+            if (lrInput) lrInput.value = conservativeLR;
 
             const updateRestText = () => {
-                const currentVol = parseFloat(volInput.value) || 0;
+                const currentVol = volInput ? (parseFloat(volInput.value) || 0) : 0;
                 const restVol = (currentVol * 0.60).toFixed(1);
-                const restLR = (parseFloat(lrInput.value || 0) * 0.60).toFixed(1);
-                document.getElementById('suggested-rest-text').innerText = `Suggested Rest: ${restVol} ${isCycling ? 'TSS' : 'km'} (LR: ${restLR} ${isCycling ? 'h' : 'km'})`;
+                const restLR = lrInput ? (parseFloat(lrInput.value || 0) * 0.60).toFixed(1) : 0;
+                const suggestionEl = document.getElementById('suggested-rest-text');
+                if (suggestionEl) suggestionEl.innerText = `Suggested Rest: ${restVol} ${isCycling ? 'TSS' : 'km'} (LR: ${restLR} ${isCycling ? 'h' : 'km'})`;
             };
 
-            volInput.addEventListener('input', updateRestText);
-            lrInput.addEventListener('input', updateRestText);
+            if (volInput) volInput.addEventListener('input', updateRestText);
+            if (lrInput) lrInput.addEventListener('input', updateRestText);
             updateRestText();
 
             checkbox.addEventListener('change', (e) => {
@@ -291,8 +292,8 @@ async function calculateSmartBlock() {
                         return;
                     }
                     // Revert to aggressive/peak
-                    volInput.value = isCycling ? Math.round(maxVol) : (maxVol * 1.10).toFixed(1);
-                    lrInput.value = maxLR.toFixed(1);
+                    if (volInput) volInput.value = isCycling ? Math.round(maxVol) : (maxVol * 1.10).toFixed(1);
+                    if (lrInput) lrInput.value = maxLR.toFixed(1);
 
                     // Update State: Remove from customRestWeeks, Add to forceBuildWeeks
                     if (state.customRestWeeks) state.customRestWeeks = state.customRestWeeks.filter(w => w !== weekNum);
@@ -300,8 +301,8 @@ async function calculateSmartBlock() {
                     if (!state.forceBuildWeeks.includes(weekNum)) state.forceBuildWeeks.push(weekNum);
 
                 } else {
-                    volInput.value = conservativeVol;
-                    lrInput.value = conservativeLR;
+                    if (volInput) volInput.value = conservativeVol;
+                    if (lrInput) lrInput.value = conservativeLR;
 
                     // Update State: Add to customRestWeeks, Remove from forceBuildWeeks
                     if (!state.customRestWeeks) state.customRestWeeks = [];
@@ -310,6 +311,8 @@ async function calculateSmartBlock() {
                 }
                 updateRestText();
                 viewProgressionFromInputs();
+
+
             });
         } else {
             restDiv.classList.add('hidden');
