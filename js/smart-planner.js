@@ -334,20 +334,22 @@ async function calculateSmartBlock() {
         // Since this function runs on click, we might stack listeners. 
         // Better to use onchange property or named function, but anonymous arrow function is hard to remove.
         // Let's just set oninput/onchange properties to be safe and simple for this MVP.
-        volInput.oninput = () => {
-            // Also trigger rest text update if needed
-            if (document.getElementById('use-rest-week') && document.getElementById('use-rest-week').checked) {
-                const currentVol = parseFloat(volInput.value) || 0;
-                const restVol = (currentVol * 0.60).toFixed(1);
-                const isCycling = document.getElementById('sportTypeInput').value === 'Cycling';
-                // We need to update the text, but the variables from the closure above aren't accessible here easily 
-                // unless we redefine the logic or make it global.
-                // For now, let's just trigger the view update.
-            }
-            viewProgressionFromInputs();
-        };
-        lrInput.oninput = () => viewProgressionFromInputs();
-        progInput.onchange = () => viewProgressionFromInputs();
+        if (volInput) {
+            volInput.oninput = () => {
+                // Also trigger rest text update if needed
+                if (document.getElementById('use-rest-week') && document.getElementById('use-rest-week').checked) {
+                    const currentVol = parseFloat(volInput.value) || 0;
+                    const restVol = (currentVol * 0.60).toFixed(1);
+                    const isCycling = document.getElementById('sportTypeInput').value === 'Cycling';
+                    // We need to update the text, but the variables from the closure above aren't accessible here easily 
+                    // unless we redefine the logic or make it global.
+                    // For now, let's just trigger the view update.
+                }
+                viewProgressionFromInputs();
+            };
+        }
+        if (lrInput) lrInput.oninput = () => viewProgressionFromInputs();
+        if (progInput) progInput.onchange = () => viewProgressionFromInputs();
         if (lrProgInput) lrProgInput.onchange = () => viewProgressionFromInputs();
 
         if (raceDate) {
