@@ -2,29 +2,45 @@
 // CYCLING PLANNING LOGIC
 // ==========================================
 
-function calculateCyclingPlan(startTss, currentCtl, raceDateStr, options = {}, startLongRideHours = 1.5) {
+function calculateAdvancedCyclingPlan(startTss, currentCtl, raceDateStr, options = {}, startLongRideHours = 1.5) {
     // Input Validation
     let startLoad = parseFloat(startTss); // This is essentially the starting weekly load
     let fitness = parseFloat(currentCtl); // CTL
+
+    // Options Extraction
+    const rampRate = options.rampRate || 5; // CTL ramp per week
+
+    // If startLoad looks like CTL (e.g. < 100), calculate implied weekly load to achieve ramp
+    if (!isNaN(startLoad) && startLoad < 100) {
+        startLoad = 7 * (startLoad + (6 * rampRate));
+    }
+
     if (isNaN(startLoad)) startLoad = 300;
     if (isNaN(fitness)) fitness = 40;
 
     const raceDate = new Date(raceDateStr);
-    const today = new Date();
-    const day = today.getDay() || 7;
-    if (day !== 1) today.setDate(today.getDate() - day + 1);
-    today.setHours(0, 0, 0, 0);
 
-    // Determine Plan Start Date
-    const planStartDate = options.planStartDate ? new Date(options.planStartDate) : today;
+    // Options Extraction
+    const taperDuration = options.taperDuration || 1;
+    const customRestWeeks = options.customRestWeeks || [];
+    const forceBuildWeeks = options.forceBuildWeeks || [];
+    const startWithRestWeek = options.startWithRestWeek || false;
+    const longRideCap = options.longRideCap || 4.0;
+
+    // Use Plan Start Date if provided, otherwise default to Today
+    const planStartDate = options.planStartDate ? new Date(options.planStartDate) : new Date();
+
+    // Force Start Date to Monday of Current Week (if not already)
+    const day = planStartDate.getDay() || 7; // 1=Mon, 7=Sun
+    if (day !== 1) {
+        planStartDate.setDate(planStartDate.getDate() - day + 1);
+    }
+    planStartDate.setHours(0, 0, 0, 0);
 
     const msPerWeek = 1000 * 60 * 60 * 24 * 7;
     const weeksUntilRace = Math.ceil((raceDate - planStartDate) / msPerWeek);
 
     if (weeksUntilRace < 1) return [];
-
-    const rampRate = options.rampRate || 5; // CTL ramp per week
-    const taperDuration = 1; // Fixed 1 week taper
 
     let plan = [];
 
@@ -56,18 +72,32 @@ function calculateCyclingPlan(startTss, currentCtl, raceDateStr, options = {}, s
             phase = "Taper";
             focus = "Freshness";
         } else {
-            // Standard Blocks
-            if (weeksRemaining <= 5) phase = "Peak";
-            else if (weeksRemaining <= 9) phase = "Build 2";
-            else if (weeksRemaining <= 13) phase = "Build 1";
-            else if (weeksRemaining <= 17) phase = "Base 3";
-            else phase = "Base 2";
-
-            // Recovery Week Logic (Every 4th week)
-            if (weekNum % 4 === 0) {
+            // Check for Custom Rest Weeks
+            if (customRestWeeks.includes(weekNum)) {
+                isRecovery = true;
+                phase = "Custom Recovery";
+                focus = "Recovery";
+            } else if (forceBuildWeeks.includes(weekNum)) {
+                // Force Build (skip recovery check)
+                isRecovery = false;
+            } else if (startWithRestWeek && weekNum === 1) {
+                isRecovery = true;
+                phase = "Recovery Start";
+                focus = "Recovery";
+            } else if (weekNum % 4 === 0) {
+                // Standard Recovery Week Logic (Every 4th week)
                 isRecovery = true;
                 phase = "Recovery";
                 focus = "Recovery";
+            }
+
+            if (!isRecovery) {
+                // Standard Blocks
+                if (weeksRemaining <= 5) phase = "Peak";
+                else if (weeksRemaining <= 9) phase = "Build 2";
+                else if (weeksRemaining <= 13) phase = "Build 1";
+                else if (weeksRemaining <= 17) phase = "Base 3";
+                else phase = "Base 2";
             }
         }
 
@@ -117,7 +147,7 @@ function calculateCyclingPlan(startTss, currentCtl, raceDateStr, options = {}, s
 
         // Hard Constraints on Long Ride
         if (longRideDuration < 2 && !isRaceWeek) longRideDuration = 2;
-        if (longRideDuration > 6) longRideDuration = 6;
+        if (longRideDuration > longRideCap) longRideDuration = longRideCap;
 
         plan.push({
             week: weekNum,

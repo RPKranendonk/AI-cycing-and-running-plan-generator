@@ -62,70 +62,107 @@ function getVal(id, defaultVal = "") {
     return el ? el.value : defaultVal;
 }
 
+// --- CONFIGURATOR FLOW LOGIC ---
+
+async function checkConnectionAndHistory() {
+    const apiKey = document.getElementById('apiKeyInput').value.trim();
+    const athleteId = document.getElementById('athleteIdInput').value.trim();
+
+    if (!apiKey) {
+        showToast("❌ Please enter API Key");
+        return;
+    }
+
+    // 1. Check Connection
+    const statusBox = document.getElementById('connectionStatus');
+    statusBox.classList.remove('hidden');
+    statusBox.innerHTML = '<div class="text-blue-400"><i class="fa-solid fa-spinner fa-spin"></i> Connecting...</div>';
+
+    try {
+        const auth = btoa(`API_KEY:${apiKey}`);
+        const res = await fetch(`https://intervals.icu/api/v1/athlete/${athleteId || '0'}`, {
+            headers: { 'Authorization': `Basic ${auth}` }
+        });
+
+        if (!res.ok) throw new Error("Connection Failed");
+        const data = await res.json();
+
+        state.athleteName = `${data.firstname} ${data.lastname}`;
+        state.athleteId = data.id;
+        document.getElementById('athleteIdInput').value = data.id;
+
+        statusBox.innerHTML = `
+            <div class="text-green-400 font-bold"><i class="fa-solid fa-check"></i> Connected as ${state.athleteName}</div>
+        `;
+
+        // 2. Fetch History (Smart Planner)
+        await calculateSmartBlock();
+
+        // 3. Reveal Next Steps
+        document.getElementById('step-4-inputs').classList.remove('hidden');
+        document.getElementById('step-5-plan-action').classList.remove('hidden');
+
+        // Pre-fill Plan Start Date if empty
+        const planStartInput = document.getElementById('planStartDateInput');
+        if (planStartInput && !planStartInput.value) {
+            const today = new Date();
+            const day = today.getDay();
+            const diff = (1 + 7 - day) % 7;
+            const daysToAdd = diff === 0 ? 7 : diff; // Next Monday
+            const targetDate = new Date(today);
+            targetDate.setDate(today.getDate() + daysToAdd);
+            planStartInput.valueAsDate = targetDate;
+        }
+
+    } catch (e) {
+        console.error(e);
+        statusBox.innerHTML = `<div class="text-red-400 font-bold">Error: ${e.message}</div>`;
+        showToast("❌ Connection Failed");
+    }
+}
+
+function calculateAndShowPlan() {
+    // Trigger the progression view logic
+    viewProgressionFromInputs();
+
+    // Ensure side panel is visible (viewProgressionFromInputs does this, but let's be explicit if needed)
+    // Also, if sport changes, we might want to hide the plan?
+    // The user said: "When I change sport afterwards it should dissappear again."
+    // This is handled in toggleSportFields.
+}
+
 function toggleSportFields() {
     const sport = document.getElementById('sportTypeInput').value;
-    const runContainer = document.getElementById('runDistanceContainer');
-    const cycleContainer = document.getElementById('cycleDistanceContainer');
-    const fitnessContainer = document.getElementById('currentFitnessContainer');
+    const cyclingContainer = document.getElementById('cycling-config-container');
+    const runningContainer = document.getElementById('running-config-container');
 
-    // Labels to update
-    const lblStartVol = document.getElementById('lbl-start-vol');
-    const lblProgression = document.getElementById('lbl-progression');
-    const lblStartLR = document.getElementById('lbl-start-lr');
-    const progSelect = document.getElementById('progressionRateInput');
-    const lrProgContainer = document.getElementById('lr-progression-container');
-    const taperContainer = document.getElementById('taperContainer');
+    // Race Goal Distance Containers
+    const runDistanceContainer = document.getElementById('runDistanceContainer');
+    const cycleDistanceContainer = document.getElementById('cycleDistanceContainer');
 
     // Update State
     state.sportType = sport;
     localStorage.setItem('elite_sportType', sport);
 
-    const startVolContainer = document.getElementById('start-volume-container');
+    // Hide Plan Configuration (Step 4) and Action (Step 5) to force reset/re-check
+    document.getElementById('step-4-inputs').classList.add('hidden');
+    document.getElementById('step-5-plan-action').classList.add('hidden');
+    document.getElementById('progressionSidePanel').classList.add('hidden');
 
     if (sport === 'Cycling') {
-        // Show/Hide Containers
-        if (runContainer) runContainer.classList.add('hidden');
-        if (cycleContainer) cycleContainer.classList.remove('hidden');
-        if (fitnessContainer) fitnessContainer.classList.remove('hidden'); // Show CTL for cycling
-        if (lrProgContainer) lrProgContainer.classList.add('hidden'); // Hide LR Prog for cycling (auto-calc)
-        if (taperContainer) taperContainer.classList.add('hidden'); // Fixed taper for now
-        if (startVolContainer) startVolContainer.classList.add('hidden'); // Hide Start Volume (Calculated)
+        if (cyclingContainer) cyclingContainer.classList.remove('hidden');
+        if (runningContainer) runningContainer.classList.add('hidden');
 
-        // Update Labels
-        if (lblProgression) lblProgression.innerText = "Ramp Rate (TSS/wk)";
-        if (lblStartLR) lblStartLR.innerText = "Start Long Ride (Hours)";
-
-        // Update Progression Options (Ramp Rate)
-        if (progSelect) {
-            progSelect.innerHTML = `
-                <option value="3">3 pts (Conservative)</option>
-                <option value="5" selected>5 pts (Optimal)</option>
-                <option value="7">7 pts (Aggressive)</option>
-            `;
-        }
-
+        // Toggle Distance Fields
+        if (runDistanceContainer) runDistanceContainer.classList.add('hidden');
+        if (cycleDistanceContainer) cycleDistanceContainer.classList.remove('hidden');
     } else {
-        // Running
-        if (runContainer) runContainer.classList.remove('hidden');
-        if (cycleContainer) cycleContainer.classList.add('hidden');
-        if (fitnessContainer) fitnessContainer.classList.add('hidden');
-        if (lrProgContainer) lrProgContainer.classList.remove('hidden');
-        if (taperContainer) taperContainer.classList.remove('hidden');
-        if (startVolContainer) startVolContainer.classList.remove('hidden');
+        if (cyclingContainer) cyclingContainer.classList.add('hidden');
+        if (runningContainer) runningContainer.classList.remove('hidden');
 
-        // Update Labels
-        if (lblStartVol) lblStartVol.innerText = "Start Volume (km)";
-        if (lblProgression) lblProgression.innerText = "Weekly Progression";
-        if (lblStartLR) lblStartLR.innerText = "Start Long Run (km)";
-
-        // Update Progression Options (Percentage)
-        if (progSelect) {
-            progSelect.innerHTML = `
-                <option value="0.05">5% (Easy)</option>
-                <option value="0.075">7.5% (Normal)</option>
-                <option value="0.10" selected>10% (Aggr.)</option>
-            `;
-        }
+        // Toggle Distance Fields
+        if (runDistanceContainer) runDistanceContainer.classList.remove('hidden');
+        if (cycleDistanceContainer) cycleDistanceContainer.classList.add('hidden');
     }
 }
 
@@ -174,6 +211,19 @@ function updateGoalFeedback() {
             });
         }
     }
+    const sportType = state.sportType || 'Running';
+    const isCycling = sportType === 'Cycling';
+
+    // Get Inputs based on sport
+    let startDateInputId = isCycling ? 'planStartDateInputCycle' : 'planStartDateInputRun';
+    const startDateStr = document.getElementById(startDateInputId).value;
+    const raceDateStr = document.getElementById('raceDateInput').value;
+
+    if (!startDateStr || !raceDateStr) return;
+
+    // Call external function from goal-assessment.js
+    const assessment2 = assessMarathonGoal(goalTime, raceDate);
+    const minDays = assessment2.minDays || 3;
     checkMinimumDays();
 }
 
@@ -260,8 +310,9 @@ async function testIntervalsConnection() {
 
         // Set Default Dates
         const today = new Date();
-        const planStartInput = document.getElementById('planStartDateInput');
-        if (planStartInput) {
+        const planStartInputRun = document.getElementById('planStartDateInputRun');
+        const planStartInputCycle = document.getElementById('planStartDateInputCycle');
+        if (planStartInputRun || planStartInputCycle) {
             // Default to next Monday
             const day = today.getDay();
             const diff = (1 + 7 - day) % 7;
@@ -270,7 +321,8 @@ async function testIntervalsConnection() {
             const targetDate = new Date(today);
             targetDate.setDate(today.getDate() + daysToAdd);
 
-            planStartInput.valueAsDate = targetDate;
+            if (planStartInputRun) planStartInputRun.valueAsDate = targetDate;
+            if (planStartInputCycle) planStartInputCycle.valueAsDate = targetDate;
         }
 
         const raceDate = new Date();
@@ -400,20 +452,31 @@ function toggleProgressionSidePanel(show) {
 }
 
 function viewProgressionFromInputs() {
-    const vol = parseFloat(document.getElementById('target-volume').value) || 0;
-    const lr = parseFloat(document.getElementById('target-long-run').value) || 0;
-    const raceDate = document.getElementById('raceDateInput').value;
+    // Get Inputs
+    const sportType = state.sportType || 'Running';
+    let vol, lr, startDate;
 
-    if (!raceDate) {
-        showToast("ℹ️ Please set a Race Date first.");
-        return;
+    if (sportType === 'Cycling') {
+        // Cycling Inputs
+        vol = parseFloat(document.getElementById('current-fitness').value) || 0;
+        lr = parseFloat(document.getElementById('target-long-run').value) || 0;
+        startDate = document.getElementById('planStartDateInputCycle').value;
+    } else {
+        // Running Inputs
+        vol = parseFloat(document.getElementById('target-volume').value) || 0;
+        lr = parseFloat(document.getElementById('target-long-run-run').value) || 0;
+        startDate = document.getElementById('planStartDateInputRun').value;
     }
 
-    generateProgressionCalendar(vol, lr, raceDate);
+    const raceDate = document.getElementById('raceDateInput').value;
+
+    if (!startDate || !raceDate) return;
+
+    generateProgressionCalendar(vol, lr, raceDate, startDate);
     toggleProgressionSidePanel(true);
 }
 
-function generateProgressionCalendar(startVol, startLR, raceDateStr) {
+function generateProgressionCalendar(startVol, startLR, raceDateStr, planStartDateStr) {
     const container = document.getElementById('progression-calendar-content');
     if (!container) {
         console.error("progression-calendar-content container not found!");
@@ -422,12 +485,21 @@ function generateProgressionCalendar(startVol, startLR, raceDateStr) {
 
     // Get options from UI
     const startWithRestWeek = document.getElementById('use-rest-week') ? document.getElementById('use-rest-week').checked : false;
-    const taperDuration = document.getElementById('taperDurationInput') ? parseInt(document.getElementById('taperDurationInput').value) : 3;
-    const longRunProgression = document.getElementById('longRunProgressionInput') ? parseFloat(document.getElementById('longRunProgressionInput').value) : 2.0;
-    const progressionRate = document.getElementById('progressionRateInput') ? parseFloat(document.getElementById('progressionRateInput').value) : 0.10;
     const raceType = document.getElementById('raceTypeInput') ? document.getElementById('raceTypeInput').value : "Marathon";
     const sportType = document.getElementById('sportTypeInput') ? document.getElementById('sportTypeInput').value : "Running";
     const isCycling = sportType === "Cycling";
+
+    let taperDuration, longRunProgression, progressionRate;
+
+    if (isCycling) {
+        taperDuration = document.getElementById('taperDurationInputCycle') ? parseInt(document.getElementById('taperDurationInputCycle').value) : 1;
+        progressionRate = document.getElementById('progressionRateInputCycle') ? parseFloat(document.getElementById('progressionRateInputCycle').value) : 5;
+        // longRunProgression not used for cycling
+    } else {
+        taperDuration = document.getElementById('taperDurationInputRun') ? parseInt(document.getElementById('taperDurationInputRun').value) : 3;
+        progressionRate = document.getElementById('progressionRateInputRun') ? parseFloat(document.getElementById('progressionRateInputRun').value) : 0.10;
+        longRunProgression = document.getElementById('longRunProgressionInput') ? parseFloat(document.getElementById('longRunProgressionInput').value) : 2.0;
+    }
 
     // Initialize customRestWeeks in state if not present
     if (!state.customRestWeeks) {
@@ -451,12 +523,13 @@ function generateProgressionCalendar(startVol, startLR, raceDateStr) {
     let plan = [];
 
     // Get Plan Start Date (default to Today if not set)
-    const planStartInput = document.getElementById('planStartDateInput');
-    const planStartDate = planStartInput && planStartInput.value ? new Date(planStartInput.value) : new Date();
+    const planStartDate = planStartDateStr ? new Date(planStartDateStr) : new Date();
+    planStartDate.setHours(0, 0, 0, 0);
 
     // Calculate Total Weeks based on Plan Start Date
     const msPerWeek = 1000 * 60 * 60 * 24 * 7;
     const rDate = new Date(raceDateStr);
+    rDate.setHours(0, 0, 0, 0);
 
     if (isNaN(rDate.getTime()) || isNaN(planStartDate.getTime())) return;
 
@@ -473,22 +546,27 @@ function generateProgressionCalendar(startVol, startLR, raceDateStr) {
 
         // Get Inputs
         const currentCtl = parseFloat(document.getElementById('current-fitness').value) || 40;
-        const rampRate = parseInt(document.getElementById('progressionRateInput').value) || 5;
+        const rampRate = parseInt(document.getElementById('progressionRateInputCycle').value) || 5;
         const startLongRide = parseFloat(document.getElementById('target-long-run').value) || 1.5;
         const longRideCap = 4.0;
-        const taperDuration = parseInt(document.getElementById('taperDurationInput').value) || 1;
+        const taperDurationCycle = parseInt(document.getElementById('taperDurationInputCycle').value) || 1;
+
+        const cyclingOptions = {
+            rampRate: rampRate,
+            taperDuration: taperDurationCycle,
+            longRideCap: longRideCap,
+            customRestWeeks: state.customRestWeeks || [],
+            forceBuildWeeks: state.forceBuildWeeks || [],
+            startWithRestWeek: startWithRestWeek,
+            planStartDate: planStartDate
+        };
 
         const advancedPlan = calculateAdvancedCyclingPlan(
-            currentCtl,
-            rampRate,
-            startLongRide,
-            longRideCap,
-            totalWeeks,
-            state.customRestWeeks || [],
-            taperDuration,
-            state.forceBuildWeeks || [],
-            startWithRestWeek,
-            planStartDate
+            currentCtl, // startTss (using CTL as proxy for start load logic in function)
+            currentCtl, // currentCtl
+            raceDateStr,
+            cyclingOptions,
+            startLongRide
         );
 
         // Map to UI structure
@@ -502,9 +580,9 @@ function generateProgressionCalendar(startVol, startLR, raceDateStr) {
                 phaseName: w.phaseName,
                 startDateObj: weekStart,
                 startDate: weekStart.toISOString(),
-                mileage: w.goalLoad,
-                rawKm: w.goalLoad, // Added for API upload compatibility
-                longRun: w.longRideDuration,
+                mileage: w.mileage, // Correct property from planning-cycling.js
+                rawKm: w.rawKm, // Correct property from planning-cycling.js
+                longRun: w.longRun, // Correct property from planning-cycling.js
                 isRaceWeek: w.isRaceWeek // Use the calculated property
             };
         });
@@ -674,14 +752,21 @@ function generateProgressionCalendar(startVol, startLR, raceDateStr) {
 
 // Add Global Listeners for Auto-Update
 document.addEventListener('DOMContentLoaded', () => {
-    const inputs = ['target-volume', 'target-long-run', 'raceDateInput', 'planStartDateInput', 'taperDurationInput', 'longRunProgressionInput', 'progressionRateInput', 'raceTypeInput'];
+    // Add event listeners for auto-update
+    const inputs = [
+        'planStartDateInputRun', 'planStartDateInputCycle', 'raceDateInput',
+        'target-volume', 'target-long-run', 'target-long-run-run',
+        'progressionRateInput', 'progressionRateInputRun', 'progressionRateInputCycle',
+        'taperDurationInputRun', 'taperDurationInputCycle',
+        'longRunProgressionInput', 'current-fitness'
+    ];
     inputs.forEach(id => {
         const el = document.getElementById(id);
         if (el) {
             el.addEventListener('input', () => {
-                // Only update if the panel is visible (or we want it to be)
-                // For now, let's update if we have enough info
-                if (document.getElementById('raceDateInput').value) {
+                // Only update if the panel is visible
+                const panel = document.getElementById('progressionSidePanel');
+                if (panel && !panel.classList.contains('hidden') && document.getElementById('raceDateInput').value) {
                     viewProgressionFromInputs();
                 }
             });

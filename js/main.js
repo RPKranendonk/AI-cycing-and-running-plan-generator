@@ -59,44 +59,58 @@ async function fetchData(showMsg = false) {
 
 function generateTrainingPlan() {
     const sportType = state.sportType || "Running";
-    const raceDate = state.raceDate;
-    const planStartInput = document.getElementById('planStartDateInput');
-    const planStartDate = planStartInput && planStartInput.value ? planStartInput.value : new Date().toISOString().split('T')[0];
 
-    if (!raceDate) return;
+    // Get Start Date based on sport
+    let planStartDateInputId = sportType === 'Cycling' ? 'planStartDateInputCycle' : 'planStartDateInputRun';
+    const planStartDate = document.getElementById(planStartDateInputId).value;
+    const raceDate = document.getElementById('raceDateInput').value;
+
+    if (!planStartDate || !raceDate) {
+        alert("Please set both Plan Start Date and Race Date.");
+        return;
+    }
 
     if (sportType === "Cycling") {
         // Cycling Logic
         // Map UI inputs to Cycling Parameters
-        // target-volume -> Start TSS
+        // target-volume -> Start TSS (now current-fitness)
         // target-long-run -> Start Long Ride (Hours)
         // progressionRate -> Ramp Rate (e.g. 5)
 
-        const volInput = document.getElementById('target-volume');
+        const volInput = document.getElementById('current-fitness'); // Use CTL as start TSS base
         const lrInput = document.getElementById('target-long-run');
         const progInput = document.getElementById('progressionRateInput');
+        const taperInput = document.getElementById('taperDurationInput');
 
         const startTss = volInput && volInput.value ? parseFloat(volInput.value) : (state.startTss || 300);
         const startLongRide = lrInput && lrInput.value ? parseFloat(lrInput.value) : 1.5;
         const rampRate = progInput && progInput.value ? parseFloat(progInput.value) : (state.rampRate || 5);
         const currentCtl = state.currentFitness || 40;
+        const taperDuration = taperInput && taperInput.value ? parseInt(taperInput.value) : 1;
 
         // Options
         const options = {
             rampRate: rampRate,
             raceDistance: 100, // Default
-            planStartDate: planStartDate // Pass explicit start date
+            planStartDate: planStartDate, // Pass explicit start date
+            customRestWeeks: state.customRestWeeks || [],
+            forceBuildWeeks: state.forceBuildWeeks || [],
+            taperDuration: taperDuration,
+            startWithRestWeek: state.startWithRestWeek || false
         };
 
-        state.generatedPlan = calculateCyclingPlan(startTss, currentCtl, raceDate, options, startLongRide);
+        state.generatedPlan = calculateAdvancedCyclingPlan(startTss, currentCtl, raceDate, options, startLongRide);
     } else {
         // Running Logic
-        const startVol = state.startingVolume || 30;
-        const startLR = state.startingLongRun || 10;
+        const startVol = document.getElementById('target-volume') ? parseFloat(document.getElementById('target-volume').value) : (state.startingVolume || 30);
+        const startLR = document.getElementById('target-long-run-run') ? parseFloat(document.getElementById('target-long-run-run').value) : (state.startingLongRun || 10);
+
+        const progRate = document.getElementById('progressionRateInputRun') ? parseFloat(document.getElementById('progressionRateInputRun').value) : state.progressionRate;
+        const taperDur = document.getElementById('taperDurationInputRun') ? parseInt(document.getElementById('taperDurationInputRun').value) : state.taperDuration;
 
         const options = {
-            progressionRate: state.progressionRate,
-            taperDuration: state.taperDuration,
+            progressionRate: progRate,
+            taperDuration: taperDur,
             longRunProgression: state.longRunProgression,
             raceType: state.raceType,
             startWithRestWeek: state.startWithRestWeek,
