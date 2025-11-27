@@ -79,6 +79,8 @@ function toggleSportFields() {
     state.sportType = sport;
     localStorage.setItem('elite_sportType', sport);
 
+    const startVolContainer = document.getElementById('start-volume-container');
+
     if (sport === 'Cycling') {
         // Show/Hide Containers
         if (runContainer) runContainer.classList.add('hidden');
@@ -86,9 +88,9 @@ function toggleSportFields() {
         if (fitnessContainer) fitnessContainer.classList.remove('hidden'); // Show CTL for cycling
         if (lrProgContainer) lrProgContainer.classList.add('hidden'); // Hide LR Prog for cycling (auto-calc)
         if (taperContainer) taperContainer.classList.add('hidden'); // Fixed taper for now
+        if (startVolContainer) startVolContainer.classList.add('hidden'); // Hide Start Volume (Calculated)
 
         // Update Labels
-        if (lblStartVol) lblStartVol.innerText = "Start Load (TSS)";
         if (lblProgression) lblProgression.innerText = "Ramp Rate (TSS/wk)";
         if (lblStartLR) lblStartLR.innerText = "Start Long Ride (Hours)";
 
@@ -108,6 +110,7 @@ function toggleSportFields() {
         if (fitnessContainer) fitnessContainer.classList.add('hidden');
         if (lrProgContainer) lrProgContainer.classList.remove('hidden');
         if (taperContainer) taperContainer.classList.remove('hidden');
+        if (startVolContainer) startVolContainer.classList.remove('hidden');
 
         // Update Labels
         if (lblStartVol) lblStartVol.innerText = "Start Volume (km)";
