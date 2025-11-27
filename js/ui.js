@@ -11,8 +11,9 @@ function openSetup() {
 function closeSetup() { document.getElementById('setupModal').classList.add('hidden'); }
 function showToast(msg) {
     const t = document.getElementById('toast');
-    if (t) {
-        document.getElementById('toastMsg').innerText = msg;
+    const msgEl = document.getElementById('toastMsg');
+    if (t && msgEl) {
+        msgEl.innerText = msg;
         t.classList.remove('translate-x-full');
         setTimeout(() => t.classList.add('translate-x-full'), 3000);
     }
@@ -765,12 +766,12 @@ function importConfiguration() {
         if (config.runDistance && document.getElementById('runDistanceInput')) document.getElementById('runDistanceInput').value = config.runDistance;
         if (config.cycleDistance && document.getElementById('cycleDistanceInput')) document.getElementById('cycleDistanceInput').value = config.cycleDistance;
 
-        if (config.targetVolume) document.getElementById('target-volume').value = config.targetVolume;
-        if (config.targetLongRun) document.getElementById('target-long-run').value = config.targetLongRun;
-        if (config.progressionRate) document.getElementById('progressionRateInput').value = config.progressionRate;
+        if (config.targetVolume && document.getElementById('target-volume')) document.getElementById('target-volume').value = config.targetVolume;
+        if (config.targetLongRun && document.getElementById('target-long-run')) document.getElementById('target-long-run').value = config.targetLongRun;
+        if (config.progressionRate && document.getElementById('progressionRateInput')) document.getElementById('progressionRateInput').value = config.progressionRate;
         if (config.longRunProgression && document.getElementById('longRunProgressionInput')) document.getElementById('longRunProgressionInput').value = config.longRunProgression;
-        if (config.taperDuration) document.getElementById('taperDurationInput').value = config.taperDuration;
-        if (config.currentFitness) document.getElementById('current-fitness').value = config.currentFitness;
+        if (config.taperDuration && document.getElementById('taperDurationInput')) document.getElementById('taperDurationInput').value = config.taperDuration;
+        if (config.currentFitness && document.getElementById('current-fitness')) document.getElementById('current-fitness').value = config.currentFitness;
 
         // Restore State
         state.customRestWeeks = config.customRestWeeks || [];
