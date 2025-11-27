@@ -67,17 +67,28 @@ function generateTrainingPlan() {
 
     if (sportType === "Cycling") {
         // Cycling Logic
-        const startTss = state.startTss || 300; // Default
+        // Map UI inputs to Cycling Parameters
+        // target-volume -> Start TSS
+        // target-long-run -> Start Long Ride (Hours)
+        // progressionRate -> Ramp Rate (e.g. 5)
+
+        const volInput = document.getElementById('target-volume');
+        const lrInput = document.getElementById('target-long-run');
+        const progInput = document.getElementById('progressionRateInput');
+
+        const startTss = volInput && volInput.value ? parseFloat(volInput.value) : (state.startTss || 300);
+        const startLongRide = lrInput && lrInput.value ? parseFloat(lrInput.value) : 1.5;
+        const rampRate = progInput && progInput.value ? parseFloat(progInput.value) : (state.rampRate || 5);
         const currentCtl = state.currentFitness || 40;
-        const rampRate = state.rampRate || 5;
 
         // Options
         const options = {
             rampRate: rampRate,
-            raceDistance: 100 // Default
+            raceDistance: 100, // Default
+            planStartDate: planStartDate // Pass explicit start date
         };
 
-        state.generatedPlan = calculateCyclingPlan(startTss, currentCtl, raceDate, options);
+        state.generatedPlan = calculateCyclingPlan(startTss, currentCtl, raceDate, options, startLongRide);
     } else {
         // Running Logic
         const startVol = state.startingVolume || 30;
@@ -116,7 +127,7 @@ function init() {
 
     // Pre-fill Plan Start Date with next Monday (or today if Monday)
     const planStartInput = document.getElementById('planStartDateInput');
-    if (planStartInput) {
+    if (planStartInput && !planStartInput.value) {
         const today = new Date();
         const day = today.getDay();
         const diff = today.getDate() - day + (day == 0 ? -6 : 1); // adjust when day is sunday

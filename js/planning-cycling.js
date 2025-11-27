@@ -24,104 +24,78 @@ function calculateCyclingPlan(startTss, currentCtl, raceDateStr, options = {}, s
     const taperDuration = 1; // Fixed 1 week taper for cycling per request
 
     let plan = [];
-    let currentFitness = currentCtl || 40; // Default CTL
-    let currentBlockNum = 1;
-    let weekInBlock = 1;
+
+    // 2. Generate Base Plan
+    let currentTss = startTss;
     let currentLongRide = startLongRideHours;
+
+    // Determine Plan Start Date
+    // If passed in options, use it, otherwise default to today (next Monday logic handled in main.js)
+    const planStartDate = options.planStartDate ? new Date(options.planStartDate) : today;
 
     for (let i = 0; i < weeksUntilRace; i++) {
         const weekNum = i + 1;
-        const weekStart = new Date(today);
-        weekStart.setDate(today.getDate() + (i * 7));
-        const weeksRemaining = weeksUntilRace - i;
-        let isRaceWeek = (weeksRemaining === 1);
-        let isTaperWeek = (weeksRemaining <= taperDuration + 1 && !isRaceWeek); // Taper is 1 week before race
+        const weekStart = new Date(planStartDate);
+        weekStart.setDate(planStartDate.getDate() + (i * 7));
+        const dateStr = weekStart.toISOString().split('T')[0];
 
-        let targetTss = 0;
-        let weekName = "Build Week";
-        let focus = "Load";
-        let blockType = "Build";
-        let longRideDuration = currentLongRide;
+        // Determine Phase
+        let phase = "Base 1";
+        let focus = "Endurance";
 
-        if (isRaceWeek) {
-            weekName = "Race Week";
-            blockType = "Race";
-            focus = "Race";
-            // Race week TSS is low, mostly from the race itself + openers
-            targetTss = 150 + (options.raceDistance || 100); // Rough estimate
-            longRideDuration = 0; // Race day
-        } else if (isTaperWeek) {
-            weekName = "Taper Week";
-            blockType = "Taper";
-            focus = "Freshness";
-            // Taper: Drop volume significantly
-            targetTss = (plan[plan.length - 1].rawKm || 300) * 0.6; // 60% of previous week
-            longRideDuration = currentLongRide * 0.6;
-        } else {
-            // Standard 3:1 Block Structure
+        if (i > weeksUntilRace - 4) { phase = "Taper"; focus = "Recovery"; }
+        else if (i > weeksUntilRace - 8) { phase = "Peak"; focus = "Intervals"; }
+        else if (i > weeksUntilRace - 12) { phase = "Build 2"; focus = "Threshold"; }
+        else if (i > weeksUntilRace - 16) { phase = "Build 1"; focus = "Tempo"; }
+        else if (i > 8) { phase = "Base 3"; focus = "Endurance"; }
+        else if (i > 4) { phase = "Base 2"; focus = "Endurance"; }
 
-            if (weekInBlock === 4) {
-                // Recovery Week
-                weekName = "Recovery Week";
-                focus = "Shed Fatigue";
-                // 50-60% of previous week (Week 3)
-                const prevWeekTss = plan.length > 0 ? plan[plan.length - 1].rawKm : startTss;
-                targetTss = prevWeekTss * 0.55;
-                longRideDuration = currentLongRide * 0.7; // Reduced long ride
+        // Calculate Weekly Load (TSS)
+        // Week 1 should start exactly at startTss
+        let weeklyTss = currentTss;
 
-                // End of block
-                weekInBlock = 0; // Will increment to 1 next loop
-                currentBlockNum++;
-            } else {
-                // Load Week
-                if (i === 0) {
-                    targetTss = startTss;
-                    longRideDuration = startLongRideHours;
-                } else {
-                    const prevTss = plan[plan.length - 1].rawKm;
+        // Apply Ramp Rate for subsequent weeks
+        if (i > 0) {
+            weeklyTss = currentTss + rampRate;
+        }
 
-                    if (weekInBlock === 1 && i > 0) {
-                        // Start of new block.
-                        // Look at Week 3 of prev block (last load week)
-                        let lastLoadTss = startTss;
-                        let lastLoadLR = startLongRideHours;
-                        for (let k = plan.length - 1; k >= 0; k--) {
-                            if (plan[k].weekName === "Build Week") {
-                                lastLoadTss = plan[k].rawKm;
-                                lastLoadLR = plan[k].longRun;
-                                break;
-                            }
-                        }
-                        targetTss = lastLoadTss + (rampRate * 5);
-                        // Increase Long Ride slightly for new block
-                        currentLongRide = lastLoadLR + 0.5; // Add 30 mins per block? Or just keep steady?
-                        // User said "long run progression, take this one out".
-                        // Maybe just keep it steady or very slow build.
-                        // Let's assume steady for now or very small increment.
-                        longRideDuration = currentLongRide;
-                    } else {
-                        targetTss = prevTss + (rampRate * 7);
-                        longRideDuration = currentLongRide;
-                    }
-                }
-            }
-            weekInBlock++;
+        // Calculate Long Ride
+        // Enforce Limits: Min 2h, Max 6h
+        let longRide = currentLongRide;
+        if (i > 0 && i % 4 !== 3) { // Increase every week except recovery
+            longRide += 0.25; // +15 mins
+        }
+
+        // Hard Constraints
+        if (longRide < 2) longRide = 2;
+        if (longRide > 6) longRide = 6;
+
+        // Recovery Weeks (every 4th week)
+        let isRecovery = (weekNum % 4 === 0);
+        if (isRecovery) {
+            weeklyTss *= 0.6;
+            longRide *= 0.7;
+            if (longRide < 1.5) longRide = 1.5; // Allow slightly shorter for recovery
+            phase = "Recovery";
+            focus = "Recovery";
+        }
+
+        // Store for next iteration (unmodified by recovery)
+        if (!isRecovery) {
+            currentTss = weeklyTss;
+            currentLongRide = longRide;
         }
 
         plan.push({
             week: weekNum,
-            blockNum: currentBlockNum,
-            weekName: weekName,
-            phaseName: "Build Phase",
-            blockType: blockType,
-            startDateObj: weekStart,
-            startDate: weekStart.toISOString(),
-            date: weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-            rawKm: Math.round(targetTss), // Using rawKm field to store TSS for now
-            mileage: Math.round(targetTss), // Display TSS
-            longRun: parseFloat(longRideDuration.toFixed(1)), // Hours
-            isRaceWeek: isRaceWeek,
-            focus: focus
+            phaseName: phase,
+            focus: focus,
+            date: dateStr,
+            weekName: `${phase} - Week ${weekNum}`,
+            mileage: Math.round(weeklyTss), // Display TSS as "mileage" for now (UI will label it Load)
+            longRun: longRide.toFixed(1),   // Display Hours
+            rawKm: weeklyTss, // Store TSS in rawKm for compatibility
+            rawLongRun: longRide
         });
     }
 

@@ -417,6 +417,12 @@ function renderWeeklyPlan() {
         return;
     }
 
+    const isCycling = state.sportType === 'Cycling';
+    const volLabel = isCycling ? 'Load' : 'Volume';
+    const volUnit = isCycling ? 'TSS' : 'km';
+    const lrLabel = isCycling ? 'Long Ride' : 'Long Run';
+    const lrUnit = isCycling ? 'h' : 'km';
+
     state.generatedPlan.forEach((week, index) => {
         const weekCard = document.createElement('div');
         weekCard.className = 'bg-slate-800/50 rounded-xl border border-slate-700 p-4 transition-all hover:border-slate-600';
@@ -457,12 +463,12 @@ function renderWeeklyPlan() {
                 
                 <div class="flex items-center gap-6">
                     <div class="text-right">
-                        <div class="text-xs text-slate-500 uppercase tracking-wider">Volume</div>
-                        <div class="font-mono font-bold text-slate-200">${week.mileage} <span class="text-xs text-slate-500">km</span></div>
+                        <div class="text-xs text-slate-500 uppercase tracking-wider">${volLabel}</div>
+                        <div class="font-mono font-bold text-slate-200">${week.mileage} <span class="text-xs text-slate-500">${volUnit}</span></div>
                     </div>
                     <div class="text-right hidden sm:block">
-                        <div class="text-xs text-slate-500 uppercase tracking-wider">Long Run</div>
-                        <div class="font-mono font-bold text-slate-200">${week.longRun} <span class="text-xs text-slate-500">km</span></div>
+                        <div class="text-xs text-slate-500 uppercase tracking-wider">${lrLabel}</div>
+                        <div class="font-mono font-bold text-slate-200">${week.longRun} <span class="text-xs text-slate-500">${lrUnit}</span></div>
                     </div>
                     <div class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-700/50 text-slate-400 hover:bg-slate-700 hover:text-white transition-colors">
                         <i class="fa-solid fa-chevron-down transition-transform duration-300" id="chevron-${index}"></i>

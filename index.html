@@ -567,193 +567,206 @@
                                             <option value="1">1 Week</option>
                                         </select>
                                         <div id="taper-warning" class="hidden text-[10px] text-red-400 mt-1">
-                                            ⚠️ 1 week is very short.
+                                            <div id="currentFitnessContainer" class="hidden">
+                                                <label
+                                                    class="block text-[10px] text-slate-400 uppercase font-bold mb-1.5">Current
+                                                    Fitness (CTL)</label>
+                                                <input type="number" id="current-fitness" placeholder="--"
+                                                    class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:border-blue-500 outline-none transition-colors font-mono">
+                                            </div>
+                                            <div>
+                                                <label
+                                                    class="block text-[10px] text-slate-400 uppercase font-bold mb-1.5">Plan
+                                                    Start Date</label>
+                                                <input type="date" id="planStartDateInput"
+                                                    class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:border-blue-500 outline-none transition-colors font-mono">
+                                            </div>
+                                            <!-- Smart Planner Inputs -->
+                                            <div class="grid grid-cols-2 gap-4 mb-4">
+                                                <!-- Starting Volume / Load -->
+                                                <div>
+                                                    <label id="lbl-start-vol"
+                                                        class="block text-xs text-slate-400 mb-1">Start Volume
+                                                        (km)</label>
+                                                    <input type="number" id="target-volume"
+                                                        class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:border-blue-500 outline-none transition-colors"
+                                                        placeholder="e.g. 30">
+                                                </div>
+
+                                                <!-- Progression Rate / Ramp Rate -->
+                                                <div>
+                                                    <label id="lbl-progression"
+                                                        class="block text-xs text-slate-400 mb-1">Weekly
+                                                        Progression</label>
+                                                    <select id="progressionRateInput"
+                                                        class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:border-blue-500 outline-none transition-colors">
+                                                        <option value="0.05">5% (Easy)</option>
+                                                        <option value="0.075">7.5% (Normal)</option>
+                                                        <option value="0.10" selected>10% (Aggr.)</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div id="lr-progression-container">
+                                                <label
+                                                    class="block text-[10px] text-slate-400 uppercase font-bold mb-1.5">LR
+                                                    Progression</label>
+                                                <select id="longRunProgressionInput"
+                                                    class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:border-blue-500 outline-none transition-colors font-mono">
+                                                    <option value="2.0" selected>2.0 km</option>
+                                                    <option value="1.5">1.5 km</option>
+                                                    <option value="1.0">1.0 km</option>
+                                                </select>
+                                            </div>
                                         </div>
+
+                                        <div class="text-xs text-slate-400 italic">
+                                            <i class="fa-solid fa-circle-info mr-1 text-blue-400"></i>
+                                            Suggested starting values based on recent history. Start conservatively to
+                                            build
+                                            safely.
+                                        </div>
+
+                                        <!-- Button Removed -->
                                     </div>
+                                </div>
+                            </div>
+
+                            <!-- 5. AI Configuration (Renumbered) -->
+                            <div class="space-y-4">
+                                <div class="flex items-center gap-2 text-green-400">
+                                    <i class="fa-solid fa-robot"></i>
+                                    <label class="text-sm font-bold uppercase tracking-wider">5. AI
+                                        Configuration</label>
+                                </div>
+
+                                <div class="bg-slate-800/50 rounded-lg p-4 border border-slate-700/50 space-y-4">
                                     <div>
-                                        <label class="block text-[10px] text-slate-400 uppercase font-bold mb-1.5">Plan
-                                            Start Date</label>
-                                        <input type="date" id="planStartDateInput"
-                                            class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:border-blue-500 outline-none transition-colors font-mono">
-                                    </div>
-                                    <!-- Duplicate Race Date Removed -->
-                                    <div>
-                                        <label id="lbl-start-vol"
-                                            class="block text-[10px] text-slate-400 uppercase font-bold mb-1.5">Start
-                                            Volume</label>
-                                        <input type="number" id="target-volume"
-                                            class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:border-pink-500 outline-none transition-colors font-mono">
-                                    </div>
-                                    <div>
-                                        <label id="lbl-progression"
-                                            class="block text-[10px] text-slate-400 uppercase font-bold mb-1.5">Weekly
-                                            Progression</label>
-                                        <select id="progressionRateInput"
-                                            class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:border-blue-500 outline-none transition-colors font-mono">
-                                            <option value="0.05">5% (Easy)</option>
-                                            <option value="0.075">7.5% (Normal)</option>
-                                            <option value="0.10" selected>10% (Aggr.)</option>
+                                        <label class="block text-[10px] text-slate-400 uppercase font-bold mb-1.5">AI
+                                            Provider</label>
+                                        <select id="aiProviderSelect" onchange="toggleProviderFields()"
+                                            class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:border-green-500 outline-none transition-colors">
+                                            <option value="openai">OpenAI (GPT-4o)</option>
+                                            <option value="gemini">Google Gemini (2.5 Pro)</option>
                                         </select>
                                     </div>
-                                    <div>
-                                        <label id="lbl-start-lr"
-                                            class="block text-[10px] text-slate-400 uppercase font-bold mb-1.5">Start
-                                            Long Run</label>
-                                        <input type="number" id="target-long-run"
-                                            class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:border-pink-500 outline-none transition-colors font-mono">
+
+                                    <div id="openai-field">
+                                        <label
+                                            class="block text-[10px] text-slate-400 uppercase font-bold mb-1.5">OpenAI
+                                            API
+                                            Key</label>
+                                        <input type="password" id="aiApiKeyInput"
+                                            class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:border-green-500 outline-none transition-colors"
+                                            placeholder="sk-...">
                                     </div>
-                                    <div id="lr-progression-container">
-                                        <label class="block text-[10px] text-slate-400 uppercase font-bold mb-1.5">LR
-                                            Progression</label>
-                                        <select id="longRunProgressionInput"
-                                            class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:border-blue-500 outline-none transition-colors font-mono">
-                                            <option value="2.0" selected>2.0 km</option>
-                                            <option value="1.5">1.5 km</option>
-                                            <option value="1.0">1.0 km</option>
-                                        </select>
+
+                                    <div id="gemini-field" class="hidden">
+                                        <label
+                                            class="block text-[10px] text-slate-400 uppercase font-bold mb-1.5">Gemini
+                                            API
+                                            Key</label>
+                                        <input type="password" id="geminiApiKeyInput"
+                                            class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:border-green-500 outline-none transition-colors"
+                                            placeholder="AIza...">
+                                    </div>
+
+                                    <!-- Test AI Context Button -->
+                                    <button onclick="testAIContext()"
+                                        class="w-full bg-green-600/20 hover:bg-green-600/30 text-green-300 text-xs font-bold py-2.5 rounded border border-green-500/30 transition-all flex items-center justify-center gap-2">
+                                        <i class="fa-solid fa-brain"></i> Test AI Context
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Save Button -->
+                            <button onclick="saveSettings()"
+                                class="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold py-3.5 rounded-lg shadow-lg shadow-blue-900/20 transition-all transform hover:scale-[1.02]">
+                                Save Configuration
+                            </button>
+
+                            <!-- Configuration Tools -->
+                            <div class="border-t border-slate-800 pt-6 mt-6">
+                                <div class="flex items-center gap-2 text-slate-400 mb-4">
+                                    <i class="fa-solid fa-toolbox"></i>
+                                    <label class="text-xs font-bold uppercase tracking-wider">Configuration
+                                        Tools</label>
+                                </div>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <button onclick="exportConfiguration()"
+                                        class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold py-2 rounded border border-slate-700 transition-colors">
+                                        <i class="fa-solid fa-download mr-1"></i> Export Config
+                                    </button>
+                                    <div class="flex gap-2">
+                                        <input type="text" id="importConfigInput" placeholder="Paste config string..."
+                                            class="flex-1 bg-slate-900 border border-slate-700 rounded px-2 text-xs text-white focus:border-blue-500 outline-none">
+                                        <button onclick="importConfiguration()"
+                                            class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold px-3 rounded border border-slate-700 transition-colors">
+                                            <i class="fa-solid fa-upload"></i>
+                                        </button>
                                     </div>
                                 </div>
 
-                                <div class="text-xs text-slate-400 italic">
-                                    <i class="fa-solid fa-circle-info mr-1 text-blue-400"></i>
-                                    Suggested starting values based on recent history. Start conservatively to build
-                                    safely.
+                                <!-- Targets Management -->
+                                <div class="grid grid-cols-2 gap-3 mt-3">
+                                    <button id="push-targets-btn" onclick="pushWeeklyTargetsToIntervals()"
+                                        class="bg-blue-900/30 hover:bg-blue-900/50 text-blue-300 text-xs font-bold py-2 rounded border border-blue-800/50 transition-colors">
+                                        <i class="fa-solid fa-bullseye mr-1"></i> Push Weekly Targets
+                                    </button>
+                                    <button id="delete-targets-btn" onclick="deleteFutureTargets()"
+                                        class="bg-red-900/30 hover:bg-red-900/50 text-red-300 text-xs font-bold py-2 rounded border border-red-800/50 transition-colors">
+                                        <i class="fa-solid fa-trash mr-1"></i> Delete Future Targets
+                                    </button>
                                 </div>
-
-                                <!-- Button Removed -->
                             </div>
                         </div>
                     </div>
 
-                    <!-- 5. AI Configuration (Renumbered) -->
-                    <div class="space-y-4">
-                        <div class="flex items-center gap-2 text-green-400">
-                            <i class="fa-solid fa-robot"></i>
-                            <label class="text-sm font-bold uppercase tracking-wider">5. AI Configuration</label>
-                        </div>
-
-                        <div class="bg-slate-800/50 rounded-lg p-4 border border-slate-700/50 space-y-4">
-                            <div>
-                                <label class="block text-[10px] text-slate-400 uppercase font-bold mb-1.5">AI
-                                    Provider</label>
-                                <select id="aiProviderSelect" onchange="toggleProviderFields()"
-                                    class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:border-green-500 outline-none transition-colors">
-                                    <option value="openai">OpenAI (GPT-4o)</option>
-                                    <option value="gemini">Google Gemini (2.5 Pro)</option>
-                                </select>
-                            </div>
-
-                            <div id="openai-field">
-                                <label class="block text-[10px] text-slate-400 uppercase font-bold mb-1.5">OpenAI API
-                                    Key</label>
-                                <input type="password" id="aiApiKeyInput"
-                                    class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:border-green-500 outline-none transition-colors"
-                                    placeholder="sk-...">
-                            </div>
-
-                            <div id="gemini-field" class="hidden">
-                                <label class="block text-[10px] text-slate-400 uppercase font-bold mb-1.5">Gemini API
-                                    Key</label>
-                                <input type="password" id="geminiApiKeyInput"
-                                    class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:border-green-500 outline-none transition-colors"
-                                    placeholder="AIza...">
-                            </div>
-
-                            <!-- Test AI Context Button -->
-                            <button onclick="testAIContext()"
-                                class="w-full bg-green-600/20 hover:bg-green-600/30 text-green-300 text-xs font-bold py-2.5 rounded border border-green-500/30 transition-all flex items-center justify-center gap-2">
-                                <i class="fa-solid fa-brain"></i> Test AI Context
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Save Button -->
-                    <button onclick="saveSettings()"
-                        class="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold py-3.5 rounded-lg shadow-lg shadow-blue-900/20 transition-all transform hover:scale-[1.02]">
-                        Save Configuration
-                    </button>
-
-                    <!-- Configuration Tools -->
-                    <div class="border-t border-slate-800 pt-6 mt-6">
-                        <div class="flex items-center gap-2 text-slate-400 mb-4">
-                            <i class="fa-solid fa-toolbox"></i>
-                            <label class="text-xs font-bold uppercase tracking-wider">Configuration Tools</label>
-                        </div>
-                        <div class="grid grid-cols-2 gap-3">
-                            <button onclick="exportConfiguration()"
-                                class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold py-2 rounded border border-slate-700 transition-colors">
-                                <i class="fa-solid fa-download mr-1"></i> Export Config
-                            </button>
-                            <div class="flex gap-2">
-                                <input type="text" id="importConfigInput" placeholder="Paste config string..."
-                                    class="flex-1 bg-slate-900 border border-slate-700 rounded px-2 text-xs text-white focus:border-blue-500 outline-none">
-                                <button onclick="importConfiguration()"
-                                    class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold px-3 rounded border border-slate-700 transition-colors">
-                                    <i class="fa-solid fa-upload"></i>
+                    <!-- Progression Calendar Side Panel (Hidden by default) -->
+                    <div id="progressionSidePanel"
+                        class="hidden w-80 bg-slate-900 border border-slate-700 rounded-xl overflow-hidden shadow-2xl flex flex-col transition-all duration-300">
+                        <div class="p-4 border-b border-slate-800 bg-slate-800/30 flex justify-between items-center">
+                            <h3 class="text-sm font-bold text-white">Progression Path</h3>
+                            <div class="flex items-center gap-2">
+                                <button onclick="pushWeeklyTargetsToIntervals()"
+                                    class="text-blue-400 hover:text-blue-300 text-xs font-bold px-2 py-1 rounded border border-blue-500/30 bg-blue-600/10 transition-colors"
+                                    title="Push Targets to Intervals.icu">
+                                    <i class="fa-solid fa-bullseye"></i>
+                                </button>
+                                <button onclick="toggleProgressionSidePanel(false)"
+                                    class="text-slate-400 hover:text-white">
+                                    <i class="fa-solid fa-xmark"></i>
                                 </button>
                             </div>
                         </div>
-
-                        <!-- Targets Management -->
-                        <div class="grid grid-cols-2 gap-3 mt-3">
-                            <button id="push-targets-btn" onclick="pushWeeklyTargetsToIntervals()"
-                                class="bg-blue-900/30 hover:bg-blue-900/50 text-blue-300 text-xs font-bold py-2 rounded border border-blue-800/50 transition-colors">
-                                <i class="fa-solid fa-bullseye mr-1"></i> Push Weekly Targets
-                            </button>
-                            <button id="delete-targets-btn" onclick="deleteFutureTargets()"
-                                class="bg-red-900/30 hover:bg-red-900/50 text-red-300 text-xs font-bold py-2 rounded border border-red-800/50 transition-colors">
-                                <i class="fa-solid fa-trash mr-1"></i> Delete Future Targets
-                            </button>
+                        <div id="progression-calendar-content" class="flex-1 overflow-y-auto p-4 space-y-2">
+                            <!-- Injected via JS -->
                         </div>
                     </div>
+
                 </div>
             </div>
 
-            <!-- Progression Calendar Side Panel (Hidden by default) -->
-            <div id="progressionSidePanel"
-                class="hidden w-80 bg-slate-900 border border-slate-700 rounded-xl overflow-hidden shadow-2xl flex flex-col transition-all duration-300">
-                <div class="p-4 border-b border-slate-800 bg-slate-800/30 flex justify-between items-center">
-                    <h3 class="text-sm font-bold text-white">Progression Path</h3>
-                    <div class="flex items-center gap-2">
-                        <button onclick="pushWeeklyTargetsToIntervals()"
-                            class="text-blue-400 hover:text-blue-300 text-xs font-bold px-2 py-1 rounded border border-blue-500/30 bg-blue-600/10 transition-colors"
-                            title="Push Targets to Intervals.icu">
-                            <i class="fa-solid fa-bullseye"></i>
-                        </button>
-                        <button onclick="toggleProgressionSidePanel(false)" class="text-slate-400 hover:text-white">
-                            <i class="fa-solid fa-xmark"></i>
-                        </button>
-                    </div>
-                </div>
-                <div id="progression-calendar-content" class="flex-1 overflow-y-auto p-4 space-y-2">
-                    <!-- Injected via JS -->
-                </div>
-            </div>
+            <script src="js/config.js"></script>
 
-        </div>
-    </div>
+            <script src="js/utils.js"></script>
+            <script src="js/goal-assessment.js"></script>
 
-    <script src="js/config.js"></script>
+            <script src="js/intervals-service.js"></script>
 
-    <script src="js/utils.js"></script>
-    <script src="js/goal-assessment.js"></script>
+            <script src="js/planning-running.js"></script>
+            <script src="js/planning-cycling.js"></script>
+            <script src="js/smart-planner.js"></script>
 
-    <script src="js/intervals-service.js"></script>
+            <script src="js/logic.js"></script>
 
-    <script src="js/planning-running.js"></script>
-    <script src="js/planning-cycling.js"></script>
-    <script src="js/smart-planner.js"></script>
+            <script src="js/ai-service.js"></script>
 
-    <script src="js/logic.js"></script>
+            <script src="js/progression.js"></script>
 
-    <script src="js/ai-service.js"></script>
+            <script src="js/weekly-ui.js"></script>
+            <script src="js/ui.js"></script>
 
-    <script src="js/progression.js"></script>
-
-    <script src="js/weekly-ui.js"></script>
-    <script src="js/ui.js"></script>
-
-    <script src="js/main.js"></script>
+            <script src="js/main.js"></script>
 
 </body>
 

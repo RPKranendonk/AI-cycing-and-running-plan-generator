@@ -62,49 +62,64 @@ function getVal(id, defaultVal = "") {
 }
 
 function toggleSportFields() {
-    const sport = getVal('sportTypeInput', 'Running');
-    state.sportType = sport; // Ensure state is synced
-
+    const sport = document.getElementById('sportTypeInput').value;
     const runContainer = document.getElementById('runDistanceContainer');
     const cycleContainer = document.getElementById('cycleDistanceContainer');
     const fitnessContainer = document.getElementById('currentFitnessContainer');
-    const taperSelect = document.getElementById('taperDurationInput');
-    const historySection = document.getElementById('smart-plan-result');
-    const progressionPanel = document.getElementById('progressionSidePanel');
 
-    // RESET UI STATE
-    // 1. Hide History Section
-    if (historySection) historySection.classList.add('hidden');
+    // Labels to update
+    const lblStartVol = document.getElementById('lbl-start-vol');
+    const lblProgression = document.getElementById('lbl-progression');
+    const lblStartLR = document.getElementById('lbl-start-lr');
+    const progSelect = document.getElementById('progressionRateInput');
+    const lrProgContainer = document.getElementById('lr-progression-container');
+    const taperContainer = document.getElementById('taperContainer');
 
-    // 2. Hide Progression Panel
-    if (progressionPanel) {
-        progressionPanel.classList.add('hidden');
-        progressionPanel.classList.remove('flex');
-    }
+    // Update State
+    state.sportType = sport;
+    localStorage.setItem('elite_sportType', sport);
 
     if (sport === 'Cycling') {
+        // Show/Hide Containers
         if (runContainer) runContainer.classList.add('hidden');
         if (cycleContainer) cycleContainer.classList.remove('hidden');
-        if (fitnessContainer) fitnessContainer.classList.remove('hidden');
+        if (fitnessContainer) fitnessContainer.classList.remove('hidden'); // Show CTL for cycling
+        if (lrProgContainer) lrProgContainer.classList.add('hidden'); // Hide LR Prog for cycling (auto-calc)
+        if (taperContainer) taperContainer.classList.add('hidden'); // Fixed taper for now
 
-        // Update Taper Options for Cycling (1-2 weeks)
-        if (taperSelect) {
-            taperSelect.innerHTML = `
-                <option value="1" selected>1 Week (Standard)</option>
-                <option value="2">2 Weeks (Max)</option>
+        // Update Labels
+        if (lblStartVol) lblStartVol.innerText = "Start Load (TSS)";
+        if (lblProgression) lblProgression.innerText = "Ramp Rate (TSS/wk)";
+        if (lblStartLR) lblStartLR.innerText = "Start Long Ride (Hours)";
+
+        // Update Progression Options (Ramp Rate)
+        if (progSelect) {
+            progSelect.innerHTML = `
+                <option value="3">3 pts (Conservative)</option>
+                <option value="5" selected>5 pts (Optimal)</option>
+                <option value="7">7 pts (Aggressive)</option>
             `;
         }
+
     } else {
+        // Running
         if (runContainer) runContainer.classList.remove('hidden');
         if (cycleContainer) cycleContainer.classList.add('hidden');
         if (fitnessContainer) fitnessContainer.classList.add('hidden');
+        if (lrProgContainer) lrProgContainer.classList.remove('hidden');
+        if (taperContainer) taperContainer.classList.remove('hidden');
 
-        // Update Taper Options for Running (Standard)
-        if (taperSelect) {
-            taperSelect.innerHTML = `
-                <option value="3" selected>3 Weeks (Standard)</option>
-                <option value="2">2 Weeks (Short)</option>
-                <option value="1">1 Week (Aggressive)</option>
+        // Update Labels
+        if (lblStartVol) lblStartVol.innerText = "Start Volume (km)";
+        if (lblProgression) lblProgression.innerText = "Weekly Progression";
+        if (lblStartLR) lblStartLR.innerText = "Start Long Run (km)";
+
+        // Update Progression Options (Percentage)
+        if (progSelect) {
+            progSelect.innerHTML = `
+                <option value="0.05">5% (Easy)</option>
+                <option value="0.075">7.5% (Normal)</option>
+                <option value="0.10" selected>10% (Aggr.)</option>
             `;
         }
     }
