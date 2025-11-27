@@ -176,30 +176,32 @@ async function calculateSmartBlock() {
         const lrProgContainer = document.getElementById('lr-progression-container');
 
         if (isCycling) {
-            lblStartVol.innerText = "Start Load (TSS)";
-            lblProgression.innerText = "Ramp Rate";
-            lblStartLR.innerText = "Longest Ride (Hours)";
+            if (lblStartVol) lblStartVol.innerText = "Start Load (TSS)";
+            if (lblProgression) lblProgression.innerText = "Ramp Rate";
+            if (lblStartLR) lblStartLR.innerText = "Longest Ride (Hours)";
 
             // Update Progression Select Options
-            progSelect.innerHTML = `
+            if (progSelect) {
+                progSelect.innerHTML = `
                 <option value="3">3 pts (Conservative)</option>
                 <option value="5" selected>5 pts (Optimal)</option>
                 <option value="7">7 pts (Aggressive)</option>
             `;
+            }
 
             // Hide LR Progression
             if (lrProgContainer) lrProgContainer.classList.add('hidden');
 
             // Set Defaults (Cycling)
             // Start TSS = Max Load
-            document.getElementById('target-volume').value = Math.round(maxVol);
+            if (document.getElementById('target-volume')) document.getElementById('target-volume').value = Math.round(maxVol);
             // Start Long Ride = Max Hours
-            document.getElementById('target-long-run').value = maxLR.toFixed(1);
+            if (document.getElementById('target-long-run')) document.getElementById('target-long-run').value = maxLR.toFixed(1);
 
         } else {
-            lblStartVol.innerText = "Start Volume";
-            lblProgression.innerText = "Weekly Progression";
-            lblStartLR.innerText = "Start Long Run";
+            if (lblStartVol) lblStartVol.innerText = "Start Volume";
+            if (lblProgression) lblProgression.innerText = "Weekly Progression";
+            if (lblStartLR) lblStartLR.innerText = "Start Long Run";
 
             // Update Progression Select Options
             progSelect.innerHTML = `
