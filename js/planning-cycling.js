@@ -4,14 +4,14 @@
 
 function calculateAdvancedCyclingPlan(startTss, currentCtl, raceDateStr, options = {}, startLongRideHours = 1.5) {
     // Input Validation
-    let startLoad = parseFloat(startTss); // This is essentially the starting weekly load
+    let startLoad = parseFloat(startTss); // This is essentially the starting weekly load (TSS)
     let fitness = parseFloat(currentCtl); // CTL
 
     // Options Extraction
     const rampRate = options.rampRate || 5; // CTL ramp per week
 
-    // If startLoad looks like CTL (e.g. < 100), calculate implied weekly load to achieve ramp
-    if (!isNaN(startLoad) && startLoad < 100) {
+    // If startLoad looks like CTL (e.g. < 150), calculate implied weekly load to achieve ramp
+    if (!isNaN(startLoad) && startLoad < 150) {
         startLoad = 7 * (startLoad + (6 * rampRate));
     }
 
@@ -49,123 +49,166 @@ function calculateAdvancedCyclingPlan(startTss, currentCtl, raceDateStr, options
     let plan = [];
 
     // Initial State
-    let currentFitness = fitness;
-    let currentLongRide = Math.max(2, Math.min(6, startLongRideHours)); // Enforce 2h-6h limits immediately
+    let currentFitness = fitness; // CTL
+    let currentWeeklyLoad = startLoad; // TSS
+    let currentLongRide = Math.max(1.5, Math.min(6, startLongRideHours));
+    let currentBlockNum = 1;
 
     for (let i = 0; i < weeksUntilRace; i++) {
         const weekNum = i + 1;
         const weekStart = new Date(planStartDate);
         weekStart.setDate(planStartDate.getDate() + (i * 7));
-        const dateStr = weekStart.toISOString().split('T')[0];
-        const weeksRemaining = weeksUntilRace - i;
 
-        // Determine Phase & Type
-        let phase = "Base 1";
-        let focus = "Endurance";
-        let isRecovery = false;
-        let isTaper = false;
-        let isRaceWeek = false;
+        // Determine Phase/Block based on weeks remaining
+        const weeksRemaining = weeksUntilRace - i; // 1 means Race Week
 
-        // Phase Logic
-        if (weeksRemaining === 1) {
-            isRaceWeek = true;
-            phase = "Race";
-            focus = "Race";
-        } else if (weeksRemaining <= taperDuration + 1) {
-            isTaper = true;
-            phase = "Taper";
-            focus = "Freshness";
-        } else {
-            // Check for Custom Rest Weeks
-            if (customRestWeeks.includes(weekNum)) {
-                isRecovery = true;
-                phase = "Custom Recovery";
-                focus = "Recovery";
-            } else if (forceBuildWeeks.includes(weekNum)) {
-                // Force Build (skip recovery check)
-                isRecovery = false;
-            } else if (startWithRestWeek && weekNum === 1) {
-                isRecovery = true;
-                phase = "Recovery Start";
-                focus = "Recovery";
-            } else if (weekNum % 4 === 0) {
-                // Standard Recovery Week Logic (Every 4th week)
-                isRecovery = true;
-                phase = "Recovery";
-                focus = "Recovery";
-            }
-
-            if (!isRecovery) {
-                // Standard Blocks
-                if (weeksRemaining <= 5) phase = "Peak";
-                else if (weeksRemaining <= 9) phase = "Build 2";
-                else if (weeksRemaining <= 13) phase = "Build 1";
-                else if (weeksRemaining <= 17) phase = "Base 3";
-                else phase = "Base 2";
-            }
-        }
-
-        // Calculate Weekly Load (TSS) using User's Formula
-        // goalLoad = 7 * (currentFitness + (6 * targetRampRate))
-
-        let weeklyLoad = 0;
-        let longRideDuration = currentLongRide;
+        let rawPhaseName = "Base Phase";
+        let blockType = "Base";
+        let isRaceWeek = (weeksRemaining === 1);
 
         if (isRaceWeek) {
-            weeklyLoad = (plan.length > 0 ? plan[plan.length - 1].rawKm : startLoad) * 0.4;
-            longRideDuration = 0;
-        } else if (isTaper) {
-            weeklyLoad = (plan.length > 0 ? plan[plan.length - 1].rawKm : startLoad) * 0.65;
-            longRideDuration = currentLongRide * 0.6;
-        } else if (isRecovery) {
-            // Recovery: Drop load significantly
-            weeklyLoad = (plan.length > 0 ? plan[plan.length - 1].rawKm : startLoad) * 0.6;
-            longRideDuration = currentLongRide * 0.7; // Reduced long ride
-
-            // Do NOT increase fitness during recovery
+            rawPhaseName = "Race Week";
+            blockType = "Race";
+        } else if (weeksRemaining <= taperDuration) {
+            rawPhaseName = "Taper Phase";
+            blockType = "Taper";
+        } else if (weeksRemaining <= taperDuration + 3) {
+            rawPhaseName = "Peak Phase";
+            blockType = "Peak";
+        } else if (weeksRemaining <= taperDuration + 3 + 4) {
+            rawPhaseName = "Build Phase";
+            blockType = "Build";
         } else {
-            // Build Week
-            if (i === 0) {
-                weeklyLoad = startLoad;
+            // If it's the very last block before Build, call it Base/Build
+            if (weeksRemaining <= taperDuration + 3 + 4 + 4) {
+                rawPhaseName = "Base/Build Phase";
             } else {
-                // Check if previous week was recovery
-                const prevWeek = plan[plan.length - 1];
-                if (prevWeek.isRecovery) {
-                    // "reduce this by 1 hour after a recovery week"
-                    currentLongRide = Math.max(2, currentLongRide - 1);
-                    longRideDuration = currentLongRide;
-                } else {
-                    // Normal progression
-                    // Increase Long Ride
-                    currentLongRide = Math.min(6, currentLongRide + 0.25); // +15 mins
-                    longRideDuration = currentLongRide;
-                }
-
-                // Calculate Load
-                weeklyLoad = 7 * (currentFitness + (6 * rampRate));
+                rawPhaseName = "Base Phase";
             }
-
-            // Update Fitness for NEXT week
-            currentFitness += rampRate;
+            blockType = "Base";
         }
 
-        // Hard Constraints on Long Ride
-        if (longRideDuration < 2 && !isRaceWeek) longRideDuration = 2;
+        // BLOCK PHASE ALIGNMENT
+        // Ensure the phase name is consistent for the entire block (to avoid UI splitting)
+        // We store the phase name for each block index.
+        if (!plan._blockPhases) plan._blockPhases = {};
+
+        let phaseName = rawPhaseName;
+
+        // Only override if NOT Race or Taper (those should be specific)
+        if (blockType !== "Race" && blockType !== "Taper") {
+            if (!plan._blockPhases[currentBlockNum]) {
+                plan._blockPhases[currentBlockNum] = rawPhaseName;
+            }
+            phaseName = plan._blockPhases[currentBlockNum];
+        }
+
+        // --- VOLUME & LONG RIDE ---
+        let weeklyLoad = 0;
+        let longRideDuration = 0;
+        let isRecoveryWeek = false;
+
+        if (blockType === "Race") {
+            weeklyLoad = currentWeeklyLoad * 0.4;
+            longRideDuration = 0;
+        } else if (blockType === "Taper") {
+            // Taper Logic
+            const weeksOut = weeksRemaining - 1;
+            let factor = 0.60 + (0.15 * (weeksOut - 1));
+            if (factor > 0.90) factor = 0.90;
+
+            weeklyLoad = currentWeeklyLoad * factor;
+            longRideDuration = currentLongRide * factor;
+        } else {
+            // Training Block
+
+            // Custom/Force Logic
+            if (customRestWeeks.includes(weekNum)) isRecoveryWeek = true;
+            else if (forceBuildWeeks.includes(weekNum)) isRecoveryWeek = false;
+            else {
+                // Default Logic
+                if (blockType !== "Peak") {
+                    if (startWithRestWeek) {
+                        if ((weekNum - 1) % 4 === 0) isRecoveryWeek = true;
+                    } else {
+                        if (weekNum % 4 === 0) isRecoveryWeek = true;
+                    }
+                }
+            }
+
+            if (isRecoveryWeek) {
+                // Recovery Week: Drop load
+                const restWeekFactor = 0.60;
+                weeklyLoad = currentWeeklyLoad * restWeekFactor;
+                longRideDuration = currentLongRide * restWeekFactor;
+            } else {
+                // Check if previous week was Recovery
+                const lastWeekIndex = plan.length - 1;
+                const lastWeek = lastWeekIndex >= 0 ? plan[lastWeekIndex] : null;
+
+                if (lastWeek && (lastWeek.weekName.includes("Recovery") || lastWeek.weekName === "Recovery Start")) {
+                    // RESTART LOGIC
+                    currentFitness += rampRate;
+                    currentWeeklyLoad = currentWeeklyLoad * 1.02; // Small bump
+                    currentLongRide = currentLongRide; // Maintain long ride
+                } else {
+                    // NORMAL PROGRESSION
+                    if (i > 0) {
+                        currentWeeklyLoad = currentWeeklyLoad * 1.05; // 5% increase per week
+                        currentLongRide = Math.min(longRideCap, currentLongRide + 0.25); // +15 mins
+                    }
+                }
+
+                // Peak Week Logic
+                if (blockType === "Peak" && weeksRemaining === taperDuration + 1) {
+                    longRideDuration = currentLongRide - 0.5; // Reduce slightly
+                    weeklyLoad = currentWeeklyLoad;
+                } else {
+                    longRideDuration = currentLongRide;
+                    weeklyLoad = currentWeeklyLoad;
+                }
+            }
+        }
+
+        // Caps
         if (longRideDuration > longRideCap) longRideDuration = longRideCap;
+        if (longRideDuration < 1.5 && !isRaceWeek && !isRecoveryWeek) longRideDuration = 1.5;
+
+        // Rounding
+        weeklyLoad = Math.round(weeklyLoad);
+        longRideDuration = parseFloat(longRideDuration.toFixed(1));
+
+        // Block Number
+        const blockNum = currentBlockNum;
+
+        // Focus
+        let focus = "Endurance";
+        if (isRaceWeek) focus = "Race Day";
+        else if (blockType === "Taper") focus = "Recovery & Sharpening";
+        else if (blockType === "Peak") focus = "Race Specific";
+        else if (blockType === "Build") focus = "Threshold";
+        else if (isRecoveryWeek) focus = "Active Recovery";
 
         plan.push({
             week: weekNum,
-            phaseName: phase,
+            blockNum: blockNum,
+            weekName: isRaceWeek ? "Race Week" : (blockType === "Taper" ? "Taper Week" : (isRecoveryWeek ? "Recovery Week" : "Build Week")),
+            phaseName: phaseName,
+            blockType: blockType,
+            startDateObj: weekStart,
+            startDate: weekStart.toISOString(),
+            date: weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+            rawKm: weeklyLoad, // Storing TSS in rawKm for compatibility with UI
+            mileage: weeklyLoad, // Display TSS
+            longRun: longRideDuration, // Display Hours
+            isRaceWeek: isRaceWeek,
             focus: focus,
-            date: dateStr,
-            weekName: `${phase} - Week ${weekNum}`,
-            mileage: Math.round(weeklyLoad), // Display TSS
-            longRun: longRideDuration.toFixed(1), // Display Hours
-            rawKm: weeklyLoad, // Store TSS
-            rawLongRun: longRideDuration,
-            isRecovery: isRecovery,
-            isRaceWeek: isRaceWeek
+            isRecovery: isRecoveryWeek
         });
+
+        if (isRecoveryWeek || (weeklyLoad < currentWeeklyLoad * 0.7 && !isRaceWeek && blockType !== "Taper")) {
+            currentBlockNum++;
+        }
     }
 
     return plan;

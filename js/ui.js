@@ -645,7 +645,7 @@ function generateProgressionCalendar(startVol, startLR, raceDateStr, planStartDa
     // Actually, better to just let the checkboxes reflect the plan state.
 
     let html = '<div class="grid grid-cols-7 gap-1 text-[10px] font-bold text-slate-400 border-b border-slate-700 pb-1 mb-1 text-center">';
-    html += `<div>Week</div><div>Date</div><div>Phase</div><div>Rest?</div><div>${isCycling ? 'Load' : 'Volume'}</div><div>${isCycling ? 'Long Ride' : 'Long Run'}</div><div>Action</div></div>`;
+    html += `<div>Week</div><div>Date</div><div>Phase</div><div>Rest?</div><div>${isCycling ? 'Load' : 'Volume'}</div><div>${isCycling ? 'Long Ride' : 'Long Run'}</div></div>`;
 
     // Track gaps
     let lastRestWeek = 0;
@@ -726,20 +726,13 @@ function generateProgressionCalendar(startVol, startLR, raceDateStr, planStartDa
         }
 
         html += `
-        <div class="grid grid-cols-7 gap-1 text-[10px] items-center text-center p-1 rounded hover:bg-slate-800 transition-colors ${rowClass}">
+        <div class="grid grid-cols-6 gap-1 text-[10px] items-center text-center p-1 rounded hover:bg-slate-800 transition-colors ${rowClass}">
             <div class="font-bold text-slate-300">W${week.week}</div>
             <div class="text-slate-500">${dateStr}</div>
             <div class="${phaseClass}">${week.phaseName || week.blockType}</div>
             <div>${checkboxHtml}</div>
             <div class="font-mono text-slate-300">${week.mileage} ${isCycling ? 'TSS' : 'km'}</div>
             <div class="font-mono text-slate-300">${week.longRun} ${isCycling ? 'h' : 'km'}</div>
-            <div>
-                <button id="push-week-btn-${index}" onclick="pushSingleWeekTarget(${index})" 
-                    class="bg-blue-600 hover:bg-blue-500 text-white px-2 py-0.5 rounded text-[9px] transition-colors"
-                    title="Push this week's target to Intervals.icu">
-                    Push
-                </button>
-            </div>
         </div>`;
     });
 

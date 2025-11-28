@@ -458,21 +458,16 @@ function renderWeeklyPlan() {
     let currentBlock = null;
 
     state.generatedPlan.forEach((week, index) => {
-        // Determine Block Name (simplify phase name)
-        let blockName = week.phaseName;
-        // Simple heuristic: Group by the main phase name (Base, Build, Peak, Taper, Race)
-        // If the phase name changes, start a new block.
-        // Or better: Use the explicit blockType if available, or derive from phaseName.
+        // Group by Block Number (calculated in planning logic)
+        // This ensures that "Base Phase" block 1 and "Base Phase" block 2 are separate.
+        const blockKey = week.blockNum || week.phaseName;
 
-        // Let's try to group by the "Base 1", "Build 1" etc. 
-        // But the user wants "Blocks". 
-        // Let's group by the exact phaseName for now, as that usually represents a block (e.g. "Base Phase 1").
-
-        if (!currentBlock || currentBlock.name !== blockName) {
+        if (!currentBlock || currentBlock.id !== blockKey) {
             currentBlock = {
-                name: blockName,
+                id: blockKey,
+                name: week.phaseName, // Use the phase name of the first week
                 weeks: [],
-                isOpen: true // Default to open? Or maybe close future blocks?
+                isOpen: true
             };
             blocks.push(currentBlock);
         }
@@ -527,6 +522,14 @@ function renderWeeklyPlan() {
                 <button onclick="event.stopPropagation(); prepareBlockWorkouts(${blockIndex})" 
                     class="text-[10px] bg-slate-700 hover:bg-blue-600 text-white px-2 py-1 rounded transition-colors border border-slate-600">
                     <i class="fa-solid fa-wand-magic-sparkles mr-1"></i> Prepare Block
+                </button>
+                <button onclick="event.stopPropagation(); pushBlockWorkouts(${blockIndex})" 
+                    class="text-[10px] bg-slate-700 hover:bg-green-600 text-white px-2 py-1 rounded transition-colors border border-slate-600">
+                    <i class="fa-solid fa-cloud-arrow-up mr-1"></i> Push Block
+                </button>
+                <button onclick="event.stopPropagation(); deleteFutureWorkouts(${blockIndex})" 
+                    class="text-[10px] bg-slate-700 hover:bg-red-600 text-white px-2 py-1 rounded transition-colors border border-slate-600">
+                    <i class="fa-solid fa-trash mr-1"></i> Clear Future
                 </button>
                 <div class="text-[10px] font-mono text-slate-500">
                     ${block.weeks[0].date} - ${block.weeks[block.weeks.length - 1].date}
@@ -631,24 +634,93 @@ async function prepareBlockWorkouts(blockIndex) {
 
     showToast(`🪄 Preparing ${targetBlock.weeks.length} weeks for ${targetBlock.name}...`);
 
-    // Sequential Generation
-    for (const week of targetBlock.weeks) {
-        try {
-            // We need to await this, but preparePlanWithAI is async? 
-            // Let's check if preparePlanWithAI returns a promise.
-            // If it updates UI, we might need to wait for it.
-            // Assuming preparePlanWithAI is async.
-            await preparePlanWithAI('week', [week.originalIndex]);
+    showToast(`🪄 Preparing ${targetBlock.weeks.length} weeks for ${targetBlock.name}...`);
 
-            // Small delay
-            await new Promise(r => setTimeout(r, 1000));
-        } catch (e) {
-            console.error(`Error preparing week ${week.week}:`, e);
-            showToast(`❌ Error on Week ${week.week}`);
-        }
+    try {
+        // Collect all week indices
+        const weekIndices = targetBlock.weeks.map(w => w.originalIndex);
+
+        // Call AI once for the whole block
+        await preparePlanWithAI('block', weekIndices);
+
+    } catch (e) {
+        console.error(`Error preparing block ${targetBlock.name}:`, e);
+        showToast(`❌ Error preparing block`);
     }
 
     showToast(`✅ Block "${targetBlock.name}" ready!`);
+}
+
+async function pushBlockWorkouts(blockIndex) {
+    if (!state.generatedPlan) return;
+
+    // Re-derive blocks
+    const blocks = [];
+    let currentBlock = null;
+    state.generatedPlan.forEach((week, index) => {
+        let blockName = week.phaseName;
+        if (!currentBlock || currentBlock.name !== blockName) {
+            currentBlock = { name: blockName, weeks: [] };
+            blocks.push(currentBlock);
+        }
+        currentBlock.weeks.push({ ...week, originalIndex: index });
+    });
+
+    const targetBlock = blocks[blockIndex];
+    if (!targetBlock) return showToast("Block not found");
+
+    if (!confirm(`Upload all workouts for "${targetBlock.name}" to Intervals.icu?`)) return;
+
+    showToast(`🚀 Uploading ${targetBlock.weeks.length} weeks...`);
+
+    try {
+        // Collect all week indices
+        const weekIndices = targetBlock.weeks.map(w => w.originalIndex);
+
+        // Use new Bulk Upload function
+        await pushWeeksToIntervalsBulk(weekIndices);
+
+        showToast(`✅ Block "${targetBlock.name}" uploaded!`);
+    } catch (e) {
+        console.error("Block upload failed:", e);
+        // Toast already shown by pushWeeksToIntervalsBulk
+    }
+}
+
+async function deleteFutureWorkouts(blockIndex) {
+    if (!state.generatedPlan) return;
+
+    // Re-derive blocks
+    const blocks = [];
+    let currentBlock = null;
+    state.generatedPlan.forEach((week, index) => {
+        let blockName = week.phaseName;
+        if (!currentBlock || currentBlock.name !== blockName) {
+            currentBlock = { name: blockName, weeks: [] };
+            blocks.push(currentBlock);
+        }
+        currentBlock.weeks.push({ ...week, originalIndex: index });
+    });
+
+    const targetBlock = blocks[blockIndex];
+    if (!targetBlock) return showToast("Block not found");
+
+    if (!confirm(`Delete all future workouts for "${targetBlock.name}"? This cannot be undone.`)) return;
+
+    showToast(`🗑️ Clearing workouts for ${targetBlock.name}...`);
+
+    for (const week of targetBlock.weeks) {
+        try {
+            // Assuming resetWeeklyWorkouts exists and clears the week
+            if (typeof resetWeeklyWorkouts === 'function') {
+                resetWeeklyWorkouts(week.originalIndex);
+            }
+        } catch (e) {
+            console.error(`Error clearing week ${week.week}:`, e);
+        }
+    }
+
+    showToast(`✅ Block "${targetBlock.name}" cleared!`);
 }
 
 

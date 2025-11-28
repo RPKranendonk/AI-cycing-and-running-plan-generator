@@ -163,8 +163,10 @@ ${params.last4Weeks}
 
 INSTRUCTIONS:
 1. Create a cohesive plan for ${isBlock ? `ALL ${params.weeks.length} weeks` : "the week"}.
-2. ${isBlock ? "Ensure PROGRESSIVE OVERLOAD." : "Respect volume targets."}
-3. **PRIORITY**: If the user has specified fixed sessions (e.g. "Gym on Tuesday" in preferences), you MUST build the plan around this.
+1. Create a cohesive plan for ${isBlock ? `ALL ${params.weeks.length} weeks` : "the week"}.
+2. ${isBlock ? "**PROGRESSIVE OVERLOAD IS CRITICAL**: You MUST plan progression across these weeks. For example, if Week 1 has 3x8min intervals, Week 2 should have 4x8min or 3x10min. Do not just repeat the same workout." : "Respect volume targets."}
+3. **CONSISTENCY**: Keep the weekly structure similar (e.g. Intervals on Tuesday, Long Ride on Sunday) but increase the difficulty/duration of key sessions week-over-week.
+4. **PRIORITY**: If the user has specified fixed sessions (e.g. "Gym on Tuesday" in preferences), you MUST build the plan around this.
 4. **MINIMUM DURATION**: All ${params.sportType === "Cycling" ? "RIDING" : "RUNNING"} sessions must be at least ${params.sportType === "Cycling" ? "45 mins" : "5km"}.
 5. **NON-TRAINING DAYS**: On days without ${params.sportType === "Cycling" ? "riding" : "running"}, you MUST propose one of: Rest, Strength, Yoga, or Cross Training.
 6. **STRUCTURED WORKOUTS**: You must provide a "steps" array for each workout.

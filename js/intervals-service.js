@@ -102,6 +102,73 @@ async function resetWeeklyWorkouts(weekIndex) {
     }
 }
 
+async function pushWeeksToIntervalsBulk(weekIndices) {
+    if (!weekIndices || weekIndices.length === 0) return;
+
+    const allEvents = [];
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+    // 1. Collect all events
+    weekIndices.forEach(weekIndex => {
+        const week = state.generatedPlan[weekIndex];
+        const workouts = state.generatedWorkouts[weekIndex];
+        const availability = state.weeklyAvailability[weekIndex] || state.defaultAvailableDays;
+
+        if (!week || !workouts) return;
+
+        workouts.forEach(workout => {
+            if (!workout.start_date_local) return;
+
+            const d = new Date(workout.start_date_local);
+            const dayNum = d.getDay();
+
+            // Check availability
+            if (!availability.includes(dayNum)) return;
+
+            const dayName = dayNames[dayNum];
+            const dateStr = workout.start_date_local.split('T')[0];
+
+            // Construct Description
+            let desc = workout.description_export || workout.description_ui || "";
+            if (workout.steps && Array.isArray(workout.steps)) {
+                desc = formatStepsForIntervals(workout.steps);
+            }
+
+            allEvents.push({
+                category: "WORKOUT",
+                start_date_local: `${dateStr}T06:00:00`,
+                type: "Run", // Default to Run, but let's check sport type if needed, though current logic hardcodes Run in pushToIntervalsICU too? 
+                // Wait, existing pushToIntervalsICU has `type: "Run"` hardcoded on line 57. 
+                // But wait, the user is doing CYCLING. 
+                // Let's check if we should use state.sportType.
+                // The existing code at line 57 says `type: "Run"`. 
+                // However, line 58 says `name: workout.type || "Run"`.
+                // Intervals.icu uses "Ride" for cycling.
+                // Let's improve this to support Cycling properly while we are here.
+                type: state.sportType === 'Cycling' ? 'Ride' : 'Run',
+                name: workout.type || (state.sportType === 'Cycling' ? 'Ride' : 'Run'),
+                description: desc,
+                external_id: `elite_coach_w${week.week}_${dayName}`
+            });
+        });
+    });
+
+    if (allEvents.length === 0) {
+        showToast("No workouts to push.");
+        return;
+    }
+
+    // 2. Bulk Upload
+    try {
+        await uploadEventsBulk(state.apiKey, state.athleteId, allEvents);
+        showToast(`✅ Bulk pushed ${allEvents.length} workouts!`);
+    } catch (e) {
+        console.error("Bulk push failed:", e);
+        showToast(`❌ Bulk Push Error: ${e.message}`);
+        throw e; // Re-throw to let caller know
+    }
+}
+
 async function deleteRemoteWorkouts(weekIndex) {
     const week = state.generatedPlan[weekIndex];
     if (!week) return;
