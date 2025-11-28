@@ -6,17 +6,25 @@ function calculateMarathonPlan(startVol, startLR, raceDateStr, planStartDate, op
     // Input Validation
     startVol = parseFloat(startVol);
     startLR = parseFloat(startLR);
-    if (isNaN(startVol)) startVol = 30; // Default fallback
-    if (isNaN(startLR)) startLR = 10;   // Default fallback
+
+    // Robust fallbacks
+    if (isNaN(startVol) || startVol < 0) startVol = 30;
+    if (isNaN(startLR) || startLR < 0) startLR = 10;
 
     const raceDate = new Date(raceDateStr);
+    if (isNaN(raceDate.getTime())) {
+        console.error("Invalid race date");
+        return [];
+    }
 
     // Use Plan Start Date if provided, otherwise default to Today
     const today = planStartDate ? new Date(planStartDate) : new Date();
+    if (isNaN(today.getTime())) {
+        console.error("Invalid plan start date");
+        return [];
+    }
 
     // Force Start Date to Monday of Current Week (if not already)
-    // Actually, if user provides a specific date, we should probably respect it or find the Monday of THAT week.
-    // Let's find the Monday of the week containing 'today' (which is planStartDate).
     const day = today.getDay() || 7; // 1=Mon, 7=Sun
     if (day !== 1) {
         today.setDate(today.getDate() - day + 1);
@@ -33,29 +41,21 @@ function calculateMarathonPlan(startVol, startLR, raceDateStr, planStartDate, op
     const startWithRestWeek = options.startWithRestWeek || false;
     const customRestWeeks = options.customRestWeeks || [];
     const forceBuildWeeks = options.forceBuildWeeks || [];
-    const raceType = options.raceType || "Marathon"; // Default to Marathon
+    const raceType = options.raceType || "Marathon";
 
     // --- RACE TYPE CONFIGURATION ---
-    let maxLongRunCap, taperDefault, longRunProgressionDefault;
+    const RACE_CONFIG = {
+        "Half Marathon": { maxLongRun: 22.0, taper: 2, lrProg: 1.5, raceDist: 21.1 },
+        "10k": { maxLongRun: 16.0, taper: 1, lrProg: 1.0, raceDist: 10.0 },
+        "Marathon": { maxLongRun: 36.0, taper: 3, lrProg: 2.0, raceDist: 42.2 }
+    };
 
-    if (raceType === "Half Marathon") {
-        maxLongRunCap = 22.0;
-        taperDefault = 2;
-        longRunProgressionDefault = 1.5;
-    } else if (raceType === "10k") {
-        maxLongRunCap = 16.0;
-        taperDefault = 1;
-        longRunProgressionDefault = 1.0;
-    } else {
-        // Marathon
-        maxLongRunCap = 36.0;
-        taperDefault = 3;
-        longRunProgressionDefault = 2.0;
-    }
+    const config = RACE_CONFIG[raceType] || RACE_CONFIG["Marathon"];
 
-    // Allow override from options, but default to race-type specific defaults if not provided
-    const taperDuration = options.taperDuration !== undefined ? options.taperDuration : taperDefault;
-    const longRunProgression = options.longRunProgression !== undefined ? options.longRunProgression : longRunProgressionDefault;
+    // Allow override from options, but default to race-type specific defaults
+    const taperDuration = options.taperDuration !== undefined ? options.taperDuration : config.taper;
+    const longRunProgression = options.longRunProgression !== undefined ? options.longRunProgression : config.lrProg;
+    const maxLongRunCap = config.maxLongRun;
 
     // --- FORWARD GENERATION RE-IMPLEMENTATION ---
     let plan = [];

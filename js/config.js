@@ -3,7 +3,7 @@ const TODAY = new Date();
 let START_DATE = new Date(TODAY);
 
 let state = {
-    apiKey: localStorage.getItem('elite_apiKey') || '3k65dka97nooel671y9gv1m3b',
+    apiKey: localStorage.getItem('elite_apiKey') || '',
     athleteName: localStorage.getItem('elite_athleteName') || '',
     aiApiKey: localStorage.getItem('elite_aiApiKey') || '',
     geminiApiKey: localStorage.getItem('elite_geminiApiKey') || '',

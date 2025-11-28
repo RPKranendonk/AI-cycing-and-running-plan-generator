@@ -6,7 +6,7 @@
 /**
  * Expands or collapses the weekly detail view for a given week
  */
-function toggleWeekDetail(weekIndex) {
+function toggleWeekDetail(weekIndex, element) {
     try {
         console.log(`toggleWeekDetail called with weekIndex: ${weekIndex}`);
         const detailId = `week-detail-${weekIndex}`;
@@ -26,10 +26,40 @@ function toggleWeekDetail(weekIndex) {
 
         // Create the detail view
         console.log(`Creating detail view for week ${weekIndex}`);
-        const weekCard = document.querySelector(`[data-week-index="${weekIndex}"]`);
+
+        // Robust strategy to find the week card
+        let weekCard = null;
+
+        // Strategy 1: Use passed element
+        if (element) {
+            weekCard = element.closest('[data-week-index]');
+            if (weekCard) console.log("Found week card via element.closest");
+        }
+
+        // Strategy 2: Use specific selector
+        if (!weekCard) {
+            weekCard = document.querySelector(`[data-week-index="${weekIndex}"]`);
+            if (weekCard) console.log("Found week card via querySelector");
+        }
+
+        // Strategy 3: Search within plan container (fallback)
+        if (!weekCard) {
+            const container = document.getElementById('planContainer');
+            if (container) {
+                const cards = container.querySelectorAll('[data-week-index]');
+                for (let card of cards) {
+                    if (parseInt(card.dataset.weekIndex) === weekIndex) {
+                        weekCard = card;
+                        console.log("Found week card via manual search in container");
+                        break;
+                    }
+                }
+            }
+        }
+
         if (!weekCard) {
             console.error(`Week card not found for index ${weekIndex}`);
-            showToast(`Error: Week card ${weekIndex} not found`);
+            showToast(`Error: Week card ${weekIndex} not found. Please regenerate plan.`);
             return;
         }
 
@@ -139,16 +169,16 @@ function toggleWeekDetail(weekIndex) {
         html += '<div class="space-y-2">';
         html += '<div class="text-xs text-slate-500 mb-1">Week options: (we recommend building your plan per block and not per week!), </div>';
         html += `<div class="flex gap-2">
-                    <button onclick="preparePlanWithAI('week', [${weekIndex}]); event.stopPropagation();" 
+                    <button type="button" onclick="preparePlanWithAI('week', [${weekIndex}]); event.stopPropagation();" 
                         class="bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 text-xs font-bold py-1.5 px-3 rounded border border-blue-500/30 transition-colors flex items-center gap-2">
                         <i class="fa-solid fa-robot"></i> Prepare Week Plan
                     </button>
-                    <button onclick="pushToIntervalsICU(${weekIndex}); event.stopPropagation();" 
+                    <button type="button" onclick="pushToIntervalsICU(${weekIndex}); event.stopPropagation();" 
                             id="push-btn-${weekIndex}"
                             class="flex-1 bg-green-600/20 hover:bg-green-600/40 text-green-400 text-[10px] font-bold py-1.5 rounded border border-green-500/30 transition-colors">
                         Upload week
                     </button>
-                    <button onclick="resetWeeklyWorkouts(${weekIndex}); event.stopPropagation();" 
+                    <button type="button" onclick="resetWeeklyWorkouts(${weekIndex}); event.stopPropagation();" 
                             class="flex-1 bg-red-600/20 hover:bg-red-600/40 text-red-400 text-[10px] font-bold py-1.5 rounded border border-red-500/30 transition-colors">
                         Reset week
                     </button>
@@ -404,7 +434,7 @@ function displayMockWorkouts(weekIndex, availability) {
 }
 
 /**
- * Renders the weekly plan to the UI
+ * Renders the weekly plan to the UI, grouped by blocks
  */
 function renderWeeklyPlan() {
     const container = document.getElementById('planContainer');
@@ -423,61 +453,202 @@ function renderWeeklyPlan() {
     const lrLabel = isCycling ? 'Long Ride' : 'Long Run';
     const lrUnit = isCycling ? 'h' : 'km';
 
+    // 1. Group weeks into blocks
+    const blocks = [];
+    let currentBlock = null;
+
     state.generatedPlan.forEach((week, index) => {
-        const weekCard = document.createElement('div');
-        weekCard.className = 'bg-slate-800/50 rounded-xl border border-slate-700 p-4 transition-all hover:border-slate-600';
-        weekCard.dataset.weekIndex = index;
+        // Determine Block Name (simplify phase name)
+        let blockName = week.phaseName;
+        // Simple heuristic: Group by the main phase name (Base, Build, Peak, Taper, Race)
+        // If the phase name changes, start a new block.
+        // Or better: Use the explicit blockType if available, or derive from phaseName.
 
-        // Determine Phase Color
-        let phaseColor = 'text-slate-400';
-        let phaseBg = 'bg-slate-700/50';
-        let phaseBorder = 'border-slate-600';
+        // Let's try to group by the "Base 1", "Build 1" etc. 
+        // But the user wants "Blocks". 
+        // Let's group by the exact phaseName for now, as that usually represents a block (e.g. "Base Phase 1").
 
-        if (week.phaseName.includes('Base')) { phaseColor = 'text-blue-400'; phaseBg = 'bg-blue-900/20'; phaseBorder = 'border-blue-500/30'; }
-        else if (week.phaseName.includes('Build')) { phaseColor = 'text-green-400'; phaseBg = 'bg-green-900/20'; phaseBorder = 'border-green-500/30'; }
-        else if (week.phaseName.includes('Peak')) { phaseColor = 'text-purple-400'; phaseBg = 'bg-purple-900/20'; phaseBorder = 'border-purple-500/30'; }
-        else if (week.phaseName.includes('Taper')) { phaseColor = 'text-yellow-400'; phaseBg = 'bg-yellow-900/20'; phaseBorder = 'border-yellow-500/30'; }
-        else if (week.phaseName.includes('Race')) { phaseColor = 'text-red-400'; phaseBg = 'bg-red-900/20'; phaseBorder = 'border-red-500/30'; }
-        else if (week.weekName.includes('Recovery')) { phaseColor = 'text-teal-400'; phaseBg = 'bg-teal-900/20'; phaseBorder = 'border-teal-500/30'; }
+        if (!currentBlock || currentBlock.name !== blockName) {
+            currentBlock = {
+                name: blockName,
+                weeks: [],
+                isOpen: true // Default to open? Or maybe close future blocks?
+            };
+            blocks.push(currentBlock);
+        }
+        currentBlock.weeks.push({ ...week, originalIndex: index });
+    });
 
-        // Header Section
-        const headerHtml = `
-            <div class="flex items-center justify-between cursor-pointer" onclick="toggleWeekDetail(${index})">
-                <div class="flex items-center gap-4">
-                    <div class="flex flex-col items-center justify-center w-12 h-12 rounded-lg ${phaseBg} ${phaseBorder} border">
-                        <span class="text-xs text-slate-400 uppercase">Week</span>
-                        <span class="text-lg font-bold ${phaseColor}">${week.week}</span>
-                    </div>
-                    <div>
-                        <div class="flex items-center gap-2">
-                            <h3 class="font-bold text-slate-200">${week.phaseName}</h3>
-                            <span class="text-xs px-2 py-0.5 rounded-full ${phaseBg} ${phaseColor} border ${phaseBorder}">${week.focus}</span>
-                        </div>
-                        <div class="text-xs text-slate-500 mt-0.5 flex items-center gap-2">
-                            <span><i class="fa-regular fa-calendar mr-1"></i> ${week.date}</span>
-                            <span>•</span>
-                            <span>${week.weekName}</span>
-                        </div>
-                    </div>
+    // 2. Render Blocks
+    blocks.forEach((block, blockIndex) => {
+        const blockId = `block-${blockIndex}`;
+
+        // Block Container
+        const blockDiv = document.createElement('div');
+        blockDiv.className = 'mb-4 bg-slate-900/30 rounded-xl border border-slate-800 overflow-hidden';
+
+        // Block Header (Click to toggle)
+        const header = document.createElement('div');
+        header.className = 'p-3 bg-slate-800/80 flex items-center justify-between cursor-pointer hover:bg-slate-800 transition-colors';
+        header.onclick = () => {
+            const content = document.getElementById(`content-${blockId}`);
+            const icon = document.getElementById(`icon-${blockId}`);
+            if (content.classList.contains('hidden')) {
+                content.classList.remove('hidden');
+                icon.classList.add('rotate-180');
+            } else {
+                content.classList.add('hidden');
+                icon.classList.remove('rotate-180');
+            }
+        };
+
+        // Determine Block Color based on name
+        let blockColorClass = 'text-slate-300';
+        if (block.name.includes('Base')) blockColorClass = 'text-blue-400';
+        if (block.name.includes('Build')) blockColorClass = 'text-green-400';
+        if (block.name.includes('Peak')) blockColorClass = 'text-purple-400';
+        if (block.name.includes('Taper')) blockColorClass = 'text-yellow-400';
+        if (block.name.includes('Race')) blockColorClass = 'text-red-400';
+        if (block.name.includes('Recovery')) blockColorClass = 'text-teal-400';
+
+        // Calculate Block Totals
+        const totalVol = block.weeks.reduce((sum, w) => sum + (parseFloat(w.mileage) || 0), 0);
+        const duration = block.weeks.length;
+
+        header.innerHTML = `
+            <div class="flex items-center gap-3">
+                <i class="fa-solid fa-chevron-down transition-transform duration-300 rotate-180 text-slate-500" id="icon-${blockId}"></i>
+                <div>
+                    <h3 class="font-bold ${blockColorClass} text-sm">${block.name}</h3>
+                    <div class="text-[10px] text-slate-500">${duration} Weeks • Total ${Math.round(totalVol)} ${volUnit}</div>
                 </div>
-                
-                <div class="flex items-center gap-6">
-                    <div class="text-right">
-                        <div class="text-xs text-slate-500 uppercase tracking-wider">${volLabel}</div>
-                        <div class="font-mono font-bold text-slate-200">${week.mileage} <span class="text-xs text-slate-500">${volUnit}</span></div>
-                    </div>
-                    <div class="text-right hidden sm:block">
-                        <div class="text-xs text-slate-500 uppercase tracking-wider">${lrLabel}</div>
-                        <div class="font-mono font-bold text-slate-200">${week.longRun} <span class="text-xs text-slate-500">${lrUnit}</span></div>
-                    </div>
-                    <div class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-700/50 text-slate-400 hover:bg-slate-700 hover:text-white transition-colors">
-                        <i class="fa-solid fa-chevron-down transition-transform duration-300" id="chevron-${index}"></i>
-                    </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <button onclick="event.stopPropagation(); prepareBlockWorkouts(${blockIndex})" 
+                    class="text-[10px] bg-slate-700 hover:bg-blue-600 text-white px-2 py-1 rounded transition-colors border border-slate-600">
+                    <i class="fa-solid fa-wand-magic-sparkles mr-1"></i> Prepare Block
+                </button>
+                <div class="text-[10px] font-mono text-slate-500">
+                    ${block.weeks[0].date} - ${block.weeks[block.weeks.length - 1].date}
                 </div>
             </div>
         `;
 
-        weekCard.innerHTML = headerHtml;
-        container.appendChild(weekCard);
+        // Block Content (Weeks)
+        const content = document.createElement('div');
+        content.id = `content-${blockId}`;
+        content.className = 'p-2 space-y-2'; // Default Open
+
+        block.weeks.forEach(week => {
+            const index = week.originalIndex;
+            const weekCard = document.createElement('div');
+            weekCard.className = 'bg-slate-800/50 rounded-lg border border-slate-700/50 p-3 transition-all hover:border-slate-600';
+            weekCard.dataset.weekIndex = index;
+
+            // Determine Phase Color (for inner badge)
+            let phaseColor = 'text-slate-400';
+            let phaseBg = 'bg-slate-700/50';
+            let phaseBorder = 'border-slate-600';
+
+            if (week.phaseName.includes('Base')) { phaseColor = 'text-blue-400'; phaseBg = 'bg-blue-900/20'; phaseBorder = 'border-blue-500/30'; }
+            else if (week.phaseName.includes('Build')) { phaseColor = 'text-green-400'; phaseBg = 'bg-green-900/20'; phaseBorder = 'border-green-500/30'; }
+            else if (week.phaseName.includes('Peak')) { phaseColor = 'text-purple-400'; phaseBg = 'bg-purple-900/20'; phaseBorder = 'border-purple-500/30'; }
+            else if (week.phaseName.includes('Taper')) { phaseColor = 'text-yellow-400'; phaseBg = 'bg-yellow-900/20'; phaseBorder = 'border-yellow-500/30'; }
+            else if (week.phaseName.includes('Race')) { phaseColor = 'text-red-400'; phaseBg = 'bg-red-900/20'; phaseBorder = 'border-red-500/30'; }
+            else if (week.weekName.includes('Recovery')) { phaseColor = 'text-teal-400'; phaseBg = 'bg-teal-900/20'; phaseBorder = 'border-teal-500/30'; }
+
+            const headerHtml = `
+                <div class="flex items-center justify-between cursor-pointer" onclick="toggleWeekDetail(${index}, this)">
+                    <div class="flex items-center gap-3">
+                        <div class="flex flex-col items-center justify-center w-10 h-10 rounded-lg ${phaseBg} ${phaseBorder} border">
+                            <span class="text-[9px] text-slate-400 uppercase">W</span>
+                            <span class="text-sm font-bold ${phaseColor}">${week.week}</span>
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-bold text-slate-300">${week.weekName}</span>
+                                <span class="text-[9px] px-1.5 py-0.5 rounded-full ${phaseBg} ${phaseColor} border ${phaseBorder}">${week.focus}</span>
+                            </div>
+                            <div class="text-[10px] text-slate-500 mt-0.5 flex items-center gap-2">
+                                <span><i class="fa-regular fa-calendar mr-1"></i> ${week.date}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center gap-4">
+                        <div class="text-right">
+                            <div class="text-[9px] text-slate-500 uppercase tracking-wider">${volLabel}</div>
+                            <div class="font-mono font-bold text-sm text-slate-200">${week.mileage} <span class="text-[9px] text-slate-500">${volUnit}</span></div>
+                        </div>
+                        <div class="text-right hidden sm:block">
+                            <div class="text-[9px] text-slate-500 uppercase tracking-wider">${lrLabel}</div>
+                            <div class="font-mono font-bold text-sm text-slate-200">${week.longRun} <span class="text-[9px] text-slate-500">${lrUnit}</span></div>
+                        </div>
+                        <div class="w-6 h-6 flex items-center justify-center rounded-full bg-slate-700/50 text-slate-400 hover:bg-slate-700 hover:text-white transition-colors">
+                            <i class="fa-solid fa-chevron-down transition-transform duration-300 text-xs" id="chevron-${index}"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Week Detail (Hidden) -->
+
+            `;
+
+            weekCard.innerHTML = headerHtml;
+            content.appendChild(weekCard);
+        });
+
+        blockDiv.appendChild(header);
+        blockDiv.appendChild(content);
+        container.appendChild(blockDiv);
     });
 }
+
+// Global variable to store blocks for access by prepareBlockWorkouts
+// We need to reconstruct the blocks logic or store it in state.
+// Since renderWeeklyPlan reconstructs it locally, we should probably store it in state or re-derive it.
+// Re-deriving is safer.
+
+async function prepareBlockWorkouts(blockIndex) {
+    if (!state.generatedPlan) return;
+
+    // Re-derive blocks (same logic as render)
+    const blocks = [];
+    let currentBlock = null;
+    state.generatedPlan.forEach((week, index) => {
+        let blockName = week.phaseName;
+        if (!currentBlock || currentBlock.name !== blockName) {
+            currentBlock = { name: blockName, weeks: [] };
+            blocks.push(currentBlock);
+        }
+        currentBlock.weeks.push({ ...week, originalIndex: index });
+    });
+
+    const targetBlock = blocks[blockIndex];
+    if (!targetBlock) return showToast("Block not found");
+
+    if (!confirm(`Prepare detailed workouts for all ${targetBlock.weeks.length} weeks in "${targetBlock.name}"? This may take a minute.`)) return;
+
+    showToast(`🪄 Preparing ${targetBlock.weeks.length} weeks for ${targetBlock.name}...`);
+
+    // Sequential Generation
+    for (const week of targetBlock.weeks) {
+        try {
+            // We need to await this, but preparePlanWithAI is async? 
+            // Let's check if preparePlanWithAI returns a promise.
+            // If it updates UI, we might need to wait for it.
+            // Assuming preparePlanWithAI is async.
+            await preparePlanWithAI('week', [week.originalIndex]);
+
+            // Small delay
+            await new Promise(r => setTimeout(r, 1000));
+        } catch (e) {
+            console.error(`Error preparing week ${week.week}:`, e);
+            showToast(`❌ Error on Week ${week.week}`);
+        }
+    }
+
+    showToast(`✅ Block "${targetBlock.name}" ready!`);
+}
+
+

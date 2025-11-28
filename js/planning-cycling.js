@@ -15,10 +15,14 @@ function calculateAdvancedCyclingPlan(startTss, currentCtl, raceDateStr, options
         startLoad = 7 * (startLoad + (6 * rampRate));
     }
 
-    if (isNaN(startLoad)) startLoad = 300;
-    if (isNaN(fitness)) fitness = 40;
+    if (isNaN(startLoad) || startLoad < 0) startLoad = 300;
+    if (isNaN(fitness) || fitness < 0) fitness = 40;
 
     const raceDate = new Date(raceDateStr);
+    if (isNaN(raceDate.getTime())) {
+        console.error("Invalid race date for cycling plan");
+        return [];
+    }
 
     // Options Extraction
     const taperDuration = options.taperDuration || 1;

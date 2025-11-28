@@ -21,7 +21,7 @@
         <div class="bg-white text-red-900 p-6 rounded-lg shadow-xl max-w-2xl">
             <h2 class="text-2xl font-bold mb-2">System Error</h2>
             <pre id="crashMsg" class="bg-gray-100 p-4 rounded text-xs font-mono overflow-auto max-h-64 mb-4"></pre>
-            <button onclick="localStorage.clear(); location.reload()"
+            <button type="button" onclick="localStorage.clear(); location.reload()"
                 class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">Reset App</button>
         </div>
     </div>
@@ -243,11 +243,11 @@
                 <div class="max-w-4xl mx-auto">
                     <div class="mb-8 flex items-center justify-between">
                         <div>
-                            <h2 class="text-2xl font-bold text-white mb-1" id="currentPhaseTitle">Personalize Marathon
+                            <h2 class="text-2xl font-bold text-white mb-1" id="currentPhaseTitle">Personalize Training
                                 Plan
                             </h2>
                         </div>
-                        <button onclick="pushWeeklyTargetsToIntervals()"
+                        <button type="button" onclick="pushWeeklyTargetsToIntervals()"
                             class="bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 text-xs font-bold py-2 px-4 rounded border border-blue-500/30 transition-colors flex items-center gap-2">
                             <i class="fa-solid fa-bullseye"></i> Push Targets
                         </button>
@@ -546,9 +546,9 @@
                                         placeholder="e.g. 2">
                                 </div>
                                 <div>
-                                    <label id="lbl-progression" class="block text-xs text-slate-400 mb-1">Ramp Rate
+                                    <label class="block text-xs text-slate-400 mb-1">Ramp Rate
                                         (TSS/wk)</label>
-                                    <select id="progressionRateInput"
+                                    <select id="progressionRateInputCycle"
                                         class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:border-blue-500 outline-none transition-colors">
                                         <option value="3">3 pts (Conservative)</option>
                                         <option value="5" selected>5 pts (Optimal)</option>
@@ -557,7 +557,7 @@
                                 </div>
                                 <div id="taperContainer">
                                     <label class="block text-xs text-slate-400 mb-1">Taper Duration</label>
-                                    <select id="taperDurationInput"
+                                    <select id="taperDurationInputCycle"
                                         class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:border-blue-500 outline-none transition-colors font-mono">
                                         <option value="3">3 Weeks</option>
                                         <option value="2">2 Weeks</option>
@@ -691,11 +691,11 @@
 
                     <!-- Targets Management -->
                     <div class="grid grid-cols-2 gap-3 mt-3">
-                        <button id="push-targets-btn" onclick="pushWeeklyTargetsToIntervals()"
+                        <button type="button" id="push-targets-btn" onclick="pushWeeklyTargetsToIntervals()"
                             class="bg-blue-900/30 hover:bg-blue-900/50 text-blue-300 text-xs font-bold py-2 rounded border border-blue-800/50 transition-colors">
                             <i class="fa-solid fa-bullseye mr-1"></i> Push Weekly Targets
                         </button>
-                        <button id="delete-targets-btn" onclick="deleteFutureTargets()"
+                        <button type="button" id="delete-targets-btn" onclick="deleteFutureTargets()"
                             class="bg-red-900/30 hover:bg-red-900/50 text-red-300 text-xs font-bold py-2 rounded border border-red-800/50 transition-colors">
                             <i class="fa-solid fa-trash mr-1"></i> Delete Future Targets
                         </button>
@@ -710,12 +710,13 @@
             <div class="p-4 border-b border-slate-800 bg-slate-800/30 flex justify-between items-center">
                 <h3 class="text-sm font-bold text-white">Progression Path</h3>
                 <div class="flex items-center gap-2">
-                    <button onclick="pushWeeklyTargetsToIntervals()"
+                    <button type="button" onclick="pushWeeklyTargetsToIntervals()"
                         class="text-blue-400 hover:text-blue-300 text-xs font-bold px-2 py-1 rounded border border-blue-500/30 bg-blue-600/10 transition-colors"
                         title="Push Targets to Intervals.icu">
                         <i class="fa-solid fa-bullseye"></i>
                     </button>
-                    <button onclick="toggleProgressionSidePanel(false)" class="text-slate-400 hover:text-white">
+                    <button type="button" onclick="toggleProgressionSidePanel(false)"
+                        class="text-slate-400 hover:text-white">
                         <i class="fa-solid fa-xmark"></i>
                     </button>
                 </div>

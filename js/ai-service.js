@@ -310,60 +310,7 @@ function processAIResponse(content, indices) {
     }
 }
 
-function renderAIWorkouts(weekIndex, workouts, availability) {
-    const container = document.getElementById(`workout-summary-${weekIndex}`);
-    if (!container) return;
-
-    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const dayNumbers = [1, 2, 3, 4, 5, 6, 0]; // Mon-Sun order
-
-    let html = '';
-
-    // Sort availability to display in Mon-Sun order
-    const sortedAvailability = [...availability].sort((a, b) => {
-        const aIndex = dayNumbers.indexOf(a);
-        const bIndex = dayNumbers.indexOf(b);
-        return aIndex - bIndex;
-    });
-
-    sortedAvailability.forEach(dayNum => {
-        const dayName = dayNames[dayNum];
-        const isLongRun = dayNum === state.longRunDay;
-
-        // Find workout for this day
-        const workout = workouts.find(w => {
-            if (w.start_date_local) {
-                const wDate = new Date(w.start_date_local);
-                const wDay = wDate.getDay();
-                return wDay === dayNum;
-            }
-            return false;
-        });
-
-        if (isLongRun) {
-            // Always prioritize the long run structure
-            const descUI = workout && workout.description_ui ? workout.description_ui : "Steady aerobic pace, build last 20%";
-            html += `<div class="p-2 bg-orange-500/10 border border-orange-500/30 rounded">
-                <div class="text-xs font-bold text-orange-400">${dayName}: Long Run</div>
-                <div class="text-[10px] text-slate-400">${descUI}</div>
-            </div>`;
-        } else if (workout) {
-            const descUI = workout.description_ui || workout.description;
-            html += `<div class="p-2 bg-slate-700/30 rounded">
-                <div class="text-xs font-bold text-slate-300">${dayName}: ${workout.type}</div>
-                <div class="text-[10px] text-slate-400">${descUI}</div>
-            </div>`;
-        } else {
-            // Fallback if AI missed a day
-            html += `<div class="p-2 bg-slate-700/30 rounded opacity-50">
-                <div class="text-xs font-bold text-slate-300">${dayName}: Easy Run</div>
-                <div class="text-[10px] text-slate-400">Easy aerobic run (AI missed this day)</div>
-            </div>`;
-        }
-    });
-
-    container.innerHTML = html;
-}
+// renderAIWorkouts is defined in weekly-ui.js
 
 function getLast4WeeksSummary() {
     if (!state.activities || state.activities.length === 0) {

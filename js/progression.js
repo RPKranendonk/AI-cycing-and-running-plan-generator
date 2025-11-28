@@ -9,7 +9,11 @@ function setProgressionRate(rate) {
     if (input) input.value = rate;
 
     // Regenerate the plan with the new rate
-    generatePlan();
+    if (typeof generateTrainingPlan === 'function') {
+        generateTrainingPlan();
+    } else {
+        console.error("generateTrainingPlan is not defined");
+    }
 
     // Re-render the plan UI using the main render function
     if (typeof renderWeeklyPlan === 'function') {

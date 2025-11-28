@@ -47,13 +47,6 @@ function toggleProviderFields() {
         openaiField.classList.add('hidden');
         geminiField.classList.remove('hidden');
     }
-    if (provider === 'openai') {
-        openaiField.classList.remove('hidden');
-        geminiField.classList.add('hidden');
-    } else {
-        openaiField.classList.add('hidden');
-        geminiField.classList.remove('hidden');
-    }
 }
 
 // --- HELPER: Safe DOM Access ---
@@ -75,49 +68,98 @@ async function checkConnectionAndHistory() {
 
     // 1. Check Connection
     const statusBox = document.getElementById('connectionStatus');
-    statusBox.classList.remove('hidden');
-    statusBox.innerHTML = '<div class="text-blue-400"><i class="fa-solid fa-spinner fa-spin"></i> Connecting...</div>';
+    if (statusBox) {
+        statusBox.classList.remove('hidden');
+        statusBox.innerHTML = '<div class="text-blue-400"><i class="fa-solid fa-spinner fa-spin"></i> Connecting...</div>';
+    }
 
     try {
         const auth = btoa(`API_KEY:${apiKey}`);
-        const res = await fetch(`https://intervals.icu/api/v1/athlete/${athleteId || '0'}`, {
+        // Default to '0' (self) if no ID provided, but warn if empty
+        const targetId = athleteId || '0';
+
+        const res = await fetch(`https://intervals.icu/api/v1/athlete/${targetId}`, {
             headers: { 'Authorization': `Basic ${auth}` }
         });
 
-        if (!res.ok) throw new Error("Connection Failed");
+        if (!res.ok) {
+            if (res.status === 401) throw new Error("Invalid API Key");
+            if (res.status === 404) throw new Error("Athlete not found");
+            throw new Error(`Connection Failed (${res.status})`);
+        }
+
         const data = await res.json();
 
         state.athleteName = `${data.firstname} ${data.lastname}`;
         state.athleteId = data.id;
-        document.getElementById('athleteIdInput').value = data.id;
 
-        statusBox.innerHTML = `
-            <div class="text-green-400 font-bold"><i class="fa-solid fa-check"></i> Connected as ${state.athleteName}</div>
-        `;
+        // Update UI with resolved ID
+        const idInput = document.getElementById('athleteIdInput');
+        if (idInput) idInput.value = data.id;
+
+        if (statusBox) {
+            statusBox.innerHTML = `
+                <div class="text-green-400 font-bold"><i class="fa-solid fa-check"></i> Connected as ${state.athleteName}</div>
+            `;
+        }
 
         // 2. Fetch History (Smart Planner)
-        await calculateSmartBlock();
+        // Wrap in try-catch to prevent blocking the flow if history fails
+        try {
+            await calculateSmartBlock();
+        } catch (smartError) {
+            console.warn("Smart Planner failed:", smartError);
+            showToast("⚠️ Could not load history for Smart Planner");
+        }
 
         // 3. Reveal Next Steps
-        document.getElementById('step-4-inputs').classList.remove('hidden');
-        document.getElementById('step-5-plan-action').classList.remove('hidden');
+        const step4 = document.getElementById('step-4-inputs');
+        const step5 = document.getElementById('step-5-plan-action');
+        if (step4) step4.classList.remove('hidden');
+        if (step5) step5.classList.remove('hidden');
 
-        // Pre-fill Plan Start Date if empty
-        const planStartInput = document.getElementById('planStartDateInput');
-        if (planStartInput && !planStartInput.value) {
-            const today = new Date();
-            const day = today.getDay();
-            const diff = (1 + 7 - day) % 7;
-            const daysToAdd = diff === 0 ? 7 : diff; // Next Monday
-            const targetDate = new Date(today);
-            targetDate.setDate(today.getDate() + daysToAdd);
-            planStartInput.valueAsDate = targetDate;
+        // Pre-fill Plan Start Date (Nearest Monday)
+        const today = new Date();
+        const day = today.getDay();
+        const diff = (1 + 7 - day) % 7; // Days to add to reach next Monday
+        const daysToAdd = diff;
+        const targetDate = new Date(today);
+        targetDate.setDate(today.getDate() + daysToAdd);
+
+        const planStartRun = document.getElementById('planStartDateInputRun');
+        const planStartCycle = document.getElementById('planStartDateInputCycle');
+
+        if (planStartRun && !planStartRun.value) planStartRun.valueAsDate = targetDate;
+        if (planStartCycle && !planStartCycle.value) planStartCycle.valueAsDate = targetDate;
+
+        // Pre-fill Start Long Run (Max from last 4 weeks)
+        if (state.activities && state.activities.length > 0) {
+            let maxRun = 0;
+            const fourWeeksAgo = new Date();
+            fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
+
+            state.activities.forEach(act => {
+                if (act.type === 'Run' || act.type === 'VirtualRun') {
+                    const actDate = new Date(act.start_date_local);
+                    if (actDate >= fourWeeksAgo) {
+                        const km = (act.distance || 0) / 1000;
+                        if (km > maxRun) maxRun = km;
+                    }
+                }
+            });
+
+            console.log("Calculated Max Long Run:", maxRun);
+
+            const longRunInputRun = document.getElementById('target-long-run-run');
+            if (longRunInputRun && maxRun > 0) {
+                longRunInputRun.value = maxRun.toFixed(1);
+            }
         }
 
     } catch (e) {
         console.error(e);
-        statusBox.innerHTML = `<div class="text-red-400 font-bold">Error: ${e.message}</div>`;
-        showToast("❌ Connection Failed");
+        if (statusBox) statusBox.innerHTML = `<div class="text-red-400 font-bold">Error: ${e.message}</div>`;
+        showToast(`❌ ${e.message}`);
     }
 }
 
@@ -785,28 +827,55 @@ function exportConfiguration() {
         const config = {
             apiKey: state.apiKey,
             athleteId: state.athleteId,
+            athleteName: state.athleteName, // Added
+
+            // AI Config
+            aiProvider: state.aiProvider,
+            aiApiKey: state.aiApiKey,
+            geminiApiKey: state.geminiApiKey,
+
             sportType: getVal('sportTypeInput'),
             raceDate: getVal('raceDateInput'),
             goalTime: getVal('goalTimeInput'),
             raceType: getVal('raceTypeInput', 'Marathon'),
 
+            // Profile & Preferences
+            trainingHistory: getVal('historyInput'),
+            injuries: getVal('injuriesInput'),
+            gymAccess: getVal('gymAccessInput'),
+            trainingPreferences: getVal('preferencesInput'),
+            defaultAvailableDays: state.defaultAvailableDays,
+            longRunDay: state.longRunDay,
+
+            // Bio / Zones
+            lthrPace: state.lthrPace,
+            lthrBpm: state.lthrBpm,
+
             // Running Inputs
             runDistance: getVal('runDistanceInput'),
+            planStartDateRun: getVal('planStartDateInputRun'), // Added
 
             // Cycling Inputs
             cycleDistance: getVal('cycleDistanceInput'),
+            planStartDateCycle: getVal('planStartDateInputCycle'), // Added
 
             // Smart Planning Inputs
             targetVolume: getVal('target-volume'),
             targetLongRun: getVal('target-long-run'),
+            targetLongRunRun: getVal('target-long-run-run'), // Added specific run input
             progressionRate: getVal('progressionRateInput'),
+            progressionRateRun: getVal('progressionRateInputRun'), // Added
+            progressionRateCycle: getVal('progressionRateInputCycle'), // Added
             longRunProgression: getVal('longRunProgressionInput'),
             taperDuration: getVal('taperDurationInput'),
+            taperDurationRun: getVal('taperDurationInputRun'), // Added
+            taperDurationCycle: getVal('taperDurationInputCycle'), // Added
             currentFitness: getVal('current-fitness'),
 
             // State Arrays
             customRestWeeks: state.customRestWeeks || [],
-            forceBuildWeeks: state.forceBuildWeeks || []
+            forceBuildWeeks: state.forceBuildWeeks || [],
+            weeklyAvailability: state.weeklyAvailability || {} // Added
         };
 
         const configStr = btoa(JSON.stringify(config));
@@ -840,6 +909,59 @@ function importConfiguration() {
             state.athleteId = config.athleteId;
             if (document.getElementById('athleteIdInput')) document.getElementById('athleteIdInput').value = config.athleteId;
         }
+        if (config.athleteName) state.athleteName = config.athleteName;
+
+        // AI Config
+        if (config.aiProvider) {
+            state.aiProvider = config.aiProvider;
+            if (document.getElementById('aiProviderSelect')) document.getElementById('aiProviderSelect').value = config.aiProvider;
+        }
+        if (config.aiApiKey) {
+            state.aiApiKey = config.aiApiKey;
+            if (document.getElementById('aiApiKeyInput')) document.getElementById('aiApiKeyInput').value = config.aiApiKey;
+        }
+        if (config.geminiApiKey) {
+            state.geminiApiKey = config.geminiApiKey;
+            if (document.getElementById('geminiApiKeyInput')) document.getElementById('geminiApiKeyInput').value = config.geminiApiKey;
+        }
+        toggleProviderFields(); // Update UI
+
+        // Profile & Preferences
+        if (config.trainingHistory) {
+            state.trainingHistory = config.trainingHistory;
+            if (document.getElementById('historyInput')) document.getElementById('historyInput').value = config.trainingHistory;
+        }
+        if (config.injuries) {
+            state.injuries = config.injuries;
+            if (document.getElementById('injuriesInput')) document.getElementById('injuriesInput').value = config.injuries;
+        }
+        if (config.gymAccess) {
+            state.gymAccess = config.gymAccess;
+            if (document.getElementById('gymAccessInput')) document.getElementById('gymAccessInput').value = config.gymAccess;
+        }
+        if (config.trainingPreferences) {
+            state.trainingPreferences = config.trainingPreferences;
+            if (document.getElementById('preferencesInput')) document.getElementById('preferencesInput').value = config.trainingPreferences;
+        }
+
+        // Days & Zones
+        if (config.defaultAvailableDays) {
+            state.defaultAvailableDays = config.defaultAvailableDays;
+            // Update checkboxes
+            const dayIds = ['dayMon', 'dayTue', 'dayWed', 'dayThu', 'dayFri', 'daySat', 'daySun'];
+            dayIds.forEach((id, index) => {
+                const dayValue = index === 6 ? 0 : index + 1;
+                const checkbox = document.getElementById(id);
+                if (checkbox) checkbox.checked = state.defaultAvailableDays.includes(dayValue);
+            });
+        }
+        if (config.longRunDay !== undefined) {
+            state.longRunDay = config.longRunDay;
+            if (document.getElementById('longRunDayInput')) document.getElementById('longRunDayInput').value = config.longRunDay;
+        }
+        if (config.lthrPace) state.lthrPace = config.lthrPace;
+        if (config.lthrBpm) state.lthrBpm = config.lthrBpm;
+
 
         if (config.sportType) document.getElementById('sportTypeInput').value = config.sportType;
         toggleSportFields(); // Trigger UI update
@@ -851,16 +973,29 @@ function importConfiguration() {
         if (config.runDistance && document.getElementById('runDistanceInput')) document.getElementById('runDistanceInput').value = config.runDistance;
         if (config.cycleDistance && document.getElementById('cycleDistanceInput')) document.getElementById('cycleDistanceInput').value = config.cycleDistance;
 
+        if (config.planStartDateRun && document.getElementById('planStartDateInputRun')) document.getElementById('planStartDateInputRun').value = config.planStartDateRun;
+        if (config.planStartDateCycle && document.getElementById('planStartDateInputCycle')) document.getElementById('planStartDateInputCycle').value = config.planStartDateCycle;
+
         if (config.targetVolume && document.getElementById('target-volume')) document.getElementById('target-volume').value = config.targetVolume;
         if (config.targetLongRun && document.getElementById('target-long-run')) document.getElementById('target-long-run').value = config.targetLongRun;
+        if (config.targetLongRunRun && document.getElementById('target-long-run-run')) document.getElementById('target-long-run-run').value = config.targetLongRunRun;
+
         if (config.progressionRate && document.getElementById('progressionRateInput')) document.getElementById('progressionRateInput').value = config.progressionRate;
+        if (config.progressionRateRun && document.getElementById('progressionRateInputRun')) document.getElementById('progressionRateInputRun').value = config.progressionRateRun;
+        if (config.progressionRateCycle && document.getElementById('progressionRateInputCycle')) document.getElementById('progressionRateInputCycle').value = config.progressionRateCycle;
+
         if (config.longRunProgression && document.getElementById('longRunProgressionInput')) document.getElementById('longRunProgressionInput').value = config.longRunProgression;
+
         if (config.taperDuration && document.getElementById('taperDurationInput')) document.getElementById('taperDurationInput').value = config.taperDuration;
+        if (config.taperDurationRun && document.getElementById('taperDurationInputRun')) document.getElementById('taperDurationInputRun').value = config.taperDurationRun;
+        if (config.taperDurationCycle && document.getElementById('taperDurationInputCycle')) document.getElementById('taperDurationInputCycle').value = config.taperDurationCycle;
+
         if (config.currentFitness && document.getElementById('current-fitness')) document.getElementById('current-fitness').value = config.currentFitness;
 
         // Restore State
         state.customRestWeeks = config.customRestWeeks || [];
         state.forceBuildWeeks = config.forceBuildWeeks || [];
+        state.weeklyAvailability = config.weeklyAvailability || {};
 
         // Sync State from Config/Inputs
         state.sportType = getVal('sportTypeInput');
@@ -868,22 +1003,43 @@ function importConfiguration() {
         state.goalTime = getVal('goalTimeInput');
         state.raceType = getVal('raceTypeInput', 'Marathon');
 
-        // Persist to LocalStorage (like saveSettings)
+        // Persist to Local Storage
         localStorage.setItem('elite_raceDate', state.raceDate);
         localStorage.setItem('elite_goalTime', state.goalTime);
         localStorage.setItem('elite_raceType', state.raceType);
         localStorage.setItem('elite_sportType', state.sportType);
+        localStorage.setItem('elite_apiKey', state.apiKey);
+        localStorage.setItem('elite_athleteId', state.athleteId);
+        localStorage.setItem('elite_aiProvider', state.aiProvider);
+        if (state.aiApiKey) localStorage.setItem('elite_aiApiKey', state.aiApiKey);
+        if (state.geminiApiKey) localStorage.setItem('elite_geminiApiKey', state.geminiApiKey);
+
+        // Persist Profile
+        localStorage.setItem('elite_history', state.trainingHistory);
+        localStorage.setItem('elite_injuries', state.injuries);
+        localStorage.setItem('elite_gymAccess', state.gymAccess);
+        localStorage.setItem('elite_preferences', state.trainingPreferences);
+
+        // Persist Availability
+        localStorage.setItem('elite_defaultAvail', JSON.stringify(state.defaultAvailableDays));
+        localStorage.setItem('elite_longRunDay', state.longRunDay);
+        localStorage.setItem('elite_weeklyAvail', JSON.stringify(state.weeklyAvailability));
 
         showToast("✅ Configuration Loaded!");
 
-        // Regenerate and Render
+        // Trigger Plan Generation
+        console.log("Import complete. Generating plan...");
         generateTrainingPlan();
-        renderWeeklyPlan();
 
-        // Auto-refresh preview if possible
-        if (config.raceDate) {
-            viewProgressionFromInputs();
-        }
+        // Force render
+        setTimeout(() => {
+            renderWeeklyPlan();
+            // Scroll to plan
+            const planContainer = document.getElementById('planContainer');
+            if (planContainer) {
+                planContainer.scrollIntoView({ behavior: 'smooth' });
+            }
+        }, 500);
 
     } catch (e) {
         console.error("Import failed:", e);

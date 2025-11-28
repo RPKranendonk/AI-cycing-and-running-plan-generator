@@ -63,6 +63,7 @@ async function calculateSmartBlock() {
         }
 
         const activities = await res.json();
+        state.activities = activities; // Store in state for prefill logic
 
         // Check Sport Type
         const sportType = document.getElementById('sportTypeInput') ? document.getElementById('sportTypeInput').value : "Running";
@@ -172,7 +173,10 @@ async function calculateSmartBlock() {
         const lblStartVol = document.getElementById('lbl-start-vol');
         const lblProgression = document.getElementById('lbl-progression');
         const lblStartLR = document.getElementById('lbl-start-lr');
-        const progSelect = document.getElementById('progressionRateInput');
+
+        // Fix: Select the correct input based on sport
+        const progSelect = isCycling ? document.getElementById('progressionRateInputCycle') : document.getElementById('progressionRateInputRun');
+
         const lrProgContainer = document.getElementById('lr-progression-container');
 
         if (isCycling) {
@@ -204,11 +208,13 @@ async function calculateSmartBlock() {
             if (lblStartLR) lblStartLR.innerText = "Start Long Run";
 
             // Update Progression Select Options
-            progSelect.innerHTML = `
-                <option value="0.05">5% (Easy)</option>
-                <option value="0.075">7.5% (Normal)</option>
-                <option value="0.10" selected>10% (Aggr.)</option>
-            `;
+            if (progSelect) {
+                progSelect.innerHTML = `
+                    <option value="0.05">5% (Easy)</option>
+                    <option value="0.075">7.5% (Normal)</option>
+                    <option value="0.10" selected>10% (Aggr.)</option>
+                `;
+            }
 
             // Show LR Progression
             if (lrProgContainer) lrProgContainer.classList.remove('hidden');
@@ -340,7 +346,6 @@ async function calculateSmartBlock() {
                 if (document.getElementById('use-rest-week') && document.getElementById('use-rest-week').checked) {
                     const currentVol = parseFloat(volInput.value) || 0;
                     const restVol = (currentVol * 0.60).toFixed(1);
-                    const isCycling = document.getElementById('sportTypeInput').value === 'Cycling';
                     // We need to update the text, but the variables from the closure above aren't accessible here easily 
                     // unless we redefine the logic or make it global.
                     // For now, let's just trigger the view update.

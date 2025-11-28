@@ -283,21 +283,28 @@ async function pushWeeklyTargetsToIntervals() {
 
         if (!apiKey || !athleteId) throw new Error("API Key or Athlete ID missing.");
 
-        // 2. Prepare promises for all weeks
-        const promises = [];
+        // 2. Prepare ALL events for bulk upload
+        const events = [];
         const targetType = isCycling ? "Ride" : "Run";
 
         // Determine Plan Start Date
-        const planStartInput = document.getElementById('planStartDateInput');
+        // Try sport-specific inputs first, then generic
+        let planStartInput = null;
+        if (isCycling) {
+            planStartInput = document.getElementById('planStartDateInputCycle');
+        } else {
+            planStartInput = document.getElementById('planStartDateInputRun');
+        }
+        if (!planStartInput) planStartInput = document.getElementById('planStartDateInput');
+
         const planStartDate = planStartInput && planStartInput.value ? new Date(planStartInput.value) : new Date();
 
         state.generatedPlan.forEach(week => {
             // Calculate Date for this week's Monday
-            // Logic: Plan Start Date + (WeekNum - 1) weeks
             const weekStart = new Date(planStartDate);
             weekStart.setDate(planStartDate.getDate() + ((week.week - 1) * 7));
 
-            // Adjust to Monday to be safe (though Plan Start should be Monday)
+            // Adjust to Monday to be safe
             const d = weekStart.getDay();
             const diff = weekStart.getDate() - d + (d == 0 ? -6 : 1); // adjust when day is sunday
             const monday = new Date(weekStart);
@@ -305,18 +312,85 @@ async function pushWeeklyTargetsToIntervals() {
 
             if (isNaN(monday.getTime())) return;
 
-            const dateStr = monday.toISOString().split('T')[0];
+            // Fix: Use local date components to avoid UTC shift (which can make Monday become Sunday)
+            const year = monday.getFullYear();
+            const month = String(monday.getMonth() + 1).padStart(2, '0');
+            const day = String(monday.getDate()).padStart(2, '0');
+            const dateStr = `${year}-${month}-${day}`;
+
             const value = week.rawKm || week.mileage || 0;
 
             if (!value) return;
 
-            // Create promise for this week's target
-            promises.push(createTargetPromise(apiKey, athleteId, dateStr, targetType, value));
+            // Create Event Object
+            const event = {
+                category: "TARGET",
+                start_date_local: `${dateStr}T00:00:00`,
+                type: targetType,
+                name: `Weekly ${targetType} Target`,
+                external_id: `target_${targetType.toLowerCase()}_${dateStr}`,
+            };
+
+            if (targetType === "Run") event.distance_target = Math.round(value * 1000);
+            if (targetType === "Ride") event.load_target = value;
+
+            events.push(event);
         });
 
-        // 3. Execute all promises
-        await Promise.all(promises);
-        showToast(`✅ Pushed ${promises.length} weekly targets!`);
+        if (events.length === 0) {
+            showToast("No targets to push.");
+            return;
+        }
+
+        // 3. Execute Single Bulk Upload
+        // We use the existing uploadEventsBulk helper if available, or fetch directly
+        const auth = btoa(`API_KEY:${apiKey}`);
+        try {
+            const response = await fetch(`https://intervals.icu/api/v1/athlete/${athleteId}/events/bulk?upsert=true`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Basic ${auth}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(events)
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Bulk API Error: ${response.status} - ${errorText}`);
+            }
+
+            showToast(`✅ Pushed ${events.length} weekly targets!`);
+        } catch (bulkError) {
+            console.warn("Bulk upload failed, falling back to sequential:", bulkError);
+            showToast("⚠️ Bulk upload failed. Retrying sequentially...");
+
+            // Fallback: Sequential Upload
+            let successCount = 0;
+            for (const event of events) {
+                try {
+                    await fetch(`https://intervals.icu/api/v1/athlete/${athleteId}/events`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Basic ${auth}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(event)
+                    });
+                    successCount++;
+                } catch (seqError) {
+                    console.error("Sequential upload error:", seqError);
+                }
+                // Small delay to be nice to the API
+                await new Promise(r => setTimeout(r, 300));
+            }
+
+            if (successCount > 0) {
+                showToast(`✅ Pushed ${successCount}/${events.length} targets (Sequential)`);
+            } else {
+                throw new Error("All upload attempts failed.");
+            }
+        }
 
     } catch (e) {
         console.error(e);
@@ -514,13 +588,8 @@ function updateWeeklyVolume() {
     if (!state.activities || state.activities.length === 0) return;
 
     // Helper: Get ISO Week Number
-    const getWeek = (d) => {
-        const date = new Date(d.getTime());
-        date.setHours(0, 0, 0, 0);
-        date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
-        const week1 = new Date(date.getFullYear(), 0, 4);
-        return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
-    };
+    // Helper: Get ISO Week Number (Using global util)
+    const getWeek = getWeekNumber;
 
     // Helper: Format Date DD.MM
     const fmtDate = (dStr) => {

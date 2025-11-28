@@ -13,6 +13,11 @@ function secondsToTime(sec) {
     return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+/**
+ * Calculates the ISO week number for a given date.
+ * @param {Date} d - The date to check
+ * @returns {number} The ISO week number
+ */
 function getWeekNumber(d) {
     const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
     const dayNum = date.getUTCDay() || 7;
