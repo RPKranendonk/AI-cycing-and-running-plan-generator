@@ -64,15 +64,15 @@ let state = {
     longRunDay: parseInt(localStorage.getItem('elite_longRunDay') || '0'),
     weeklyAvailability: JSON.parse(localStorage.getItem('elite_weeklyAvail') || '{}'),
 
-    // Daily Availability (hours per day with split AM/PM support)
+    // Daily Availability (hours per day with split Morning/Evening support)
     dailyAvailability: JSON.parse(localStorage.getItem('elite_dailyAvail') || JSON.stringify({
-        0: { hours: 3.0, split: false, amHours: 3.0, pmHours: 0 },  // Sunday
-        1: { hours: 1.5, split: false, amHours: 1.5, pmHours: 0 },  // Monday
-        2: { hours: 1.5, split: false, amHours: 1.5, pmHours: 0 },  // Tuesday
-        3: { hours: 1.5, split: false, amHours: 1.5, pmHours: 0 },  // Wednesday
-        4: { hours: 1.5, split: false, amHours: 1.5, pmHours: 0 },  // Thursday
-        5: { hours: 1.0, split: false, amHours: 1.0, pmHours: 0 },  // Friday
-        6: { hours: 2.0, split: false, amHours: 2.0, pmHours: 0 }   // Saturday
+        0: { hours: 2.0, split: false, amHours: 1.0, pmHours: 1.0 },  // Sunday
+        1: { hours: 2.0, split: false, amHours: 1.0, pmHours: 1.0 },  // Monday
+        2: { hours: 2.0, split: false, amHours: 1.0, pmHours: 1.0 },  // Tuesday
+        3: { hours: 2.0, split: false, amHours: 1.0, pmHours: 1.0 },  // Wednesday
+        4: { hours: 2.0, split: false, amHours: 1.0, pmHours: 1.0 },  // Thursday
+        5: { hours: 2.0, split: false, amHours: 1.0, pmHours: 1.0 },  // Friday
+        6: { hours: 2.0, split: false, amHours: 1.0, pmHours: 1.0 }   // Saturday
     })),
 
     // Generated Workouts

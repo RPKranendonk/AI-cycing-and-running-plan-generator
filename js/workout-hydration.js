@@ -12,7 +12,8 @@ class WorkoutHydrationService {
             if (!line.trim())
                 return;
             const parts = line.split(',');
-            // CSV Columns: DayIndex, Type, Distance, Duration, Title, StepsString
+            // CSV Columns: DayIndex, Type, Distance, Duration, Title, Slot, StepsString
+            // Slot = "morning" | "evening" | empty (defaults to "morning")
             // Note: Handle cases where StepsString might be missing or empty
             const dayIndex = parseInt(parts[0]);
             if (isNaN(dayIndex)) {
@@ -24,23 +25,48 @@ class WorkoutHydrationService {
                 return; // Double check for header
             const distance = parts[2] ? parseInt(parts[2]) : 0;
             const duration = parts[3] ? parseInt(parts[3]) : 0;
-            const title = parts[4];
-            const stepsString = parts.length > 5 ? parts.slice(5).join(',') : ''; // Join back in case of accidental commas in steps
+            const title = parts[4] ? parts[4].trim() : '';
+
+            // Parse Slot (column 5) - defaults to "morning" if not specified
+            let slot = parts[5] ? parts[5].trim().toLowerCase() : 'morning';
+            if (slot !== 'morning' && slot !== 'evening') {
+                // If slot column contains steps data (old format), treat as morning + parse as steps
+                if (slot.includes('~') || slot.includes('|')) {
+                    // This is actually steps data (old format without slot column)
+                    slot = 'morning';
+                    // Re-parse - stepsString starts at index 5
+                    var stepsString = parts.length > 5 ? parts.slice(5).join(',') : '';
+                } else {
+                    slot = 'morning';
+                    var stepsString = parts.length > 6 ? parts.slice(6).join(',') : '';
+                }
+            } else {
+                // New format with slot column - steps start at index 6
+                var stepsString = parts.length > 6 ? parts.slice(6).join(',') : '';
+            }
+
             // Check validity of blockStartDate
             if (isNaN(blockStartDate.getTime())) {
                 console.error("Invalid Block Start Date passed to hydrator");
-                // fallback to today if totally broken? No, better to skip or error safely.
-                // We will skip to avoid crashing the UI logic loop.
                 return;
             }
             const workoutDate = new Date(blockStartDate);
             workoutDate.setDate(blockStartDate.getDate() + dayIndex);
+
+            // Set time based on slot: morning=06:00, evening=18:00
+            if (slot === 'evening') {
+                workoutDate.setHours(18, 0, 0, 0);
+            } else {
+                workoutDate.setHours(6, 0, 0, 0);
+            }
+
             let workout;
             if (type === 'Rest') {
                 workout = {
                     date: workoutDate.toISOString(),
                     start_date_local: workoutDate.toISOString(),
                     dayIndex,
+                    slot,
                     type: 'Rest',
                     title: title || 'Rest Day',
                     description: 'Passive Recovery',
@@ -56,6 +82,7 @@ class WorkoutHydrationService {
                     date: workoutDate.toISOString(),
                     start_date_local: workoutDate.toISOString(),
                     dayIndex,
+                    slot,
                     type,
                     title,
                     description,

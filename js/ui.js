@@ -37,7 +37,7 @@ function updateDayHours(dayNum) {
 window.updateDayHours = updateDayHours;
 
 /**
- * Toggles the AM/PM split inputs for a day
+ * Toggles the Morning/Evening split inputs for a day
  */
 function toggleSplitDay(dayNum) {
     const splitInputs = document.getElementById(`splitInputs${dayNum}`);
@@ -49,16 +49,16 @@ function toggleSplitDay(dayNum) {
             splitInputs.classList.remove('hidden');
             splitInputs.classList.add('flex');
 
-            // Initialize AM/PM values based on total
+            // Initialize Morning/Evening values based on total (50/50 split)
             if (slider) {
                 const total = parseFloat(slider.value) || 0;
                 const amInput = document.getElementById(`amHours${dayNum}`);
                 const pmInput = document.getElementById(`pmHours${dayNum}`);
                 if (amInput && pmInput) {
-                    // Default: 1/3 AM, 2/3 PM
-                    const amVal = Math.min(1.0, total * 0.33);
-                    amInput.value = amVal.toFixed(1);
-                    pmInput.value = (total - amVal).toFixed(1);
+                    // Default: 50/50 split
+                    const morningVal = total / 2;
+                    amInput.value = morningVal.toFixed(1);
+                    pmInput.value = morningVal.toFixed(1);
                 }
             }
         } else {

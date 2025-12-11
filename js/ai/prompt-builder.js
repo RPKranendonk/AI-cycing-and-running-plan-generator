@@ -203,7 +203,7 @@ function buildDailyAvailabilityDisplay(dailyAvailability) {
         if (hours === 0) {
             lines.push(`   - ${dayNames[d]}: REST (0h available)`);
         } else if (dayData.split) {
-            lines.push(`   - ${dayNames[d]}: ${hours}h total (☀️ AM: ${dayData.amHours}h + 🌙 PM: ${dayData.pmHours}h) **[DUAL SESSION DAY]**`);
+            lines.push(`   - ${dayNames[d]}: ${hours}h total (☀️ Morning: ${dayData.amHours}h + 🌙 Evening: ${dayData.pmHours}h) **[DUAL SESSION DAY]**`);
             splitDays.push(dayNames[d]);
         } else {
             lines.push(`   - ${dayNames[d]}: ${hours}h`);
@@ -213,7 +213,7 @@ function buildDailyAvailabilityDisplay(dailyAvailability) {
     lines.push(`   **Weekly Training Time Budget: ${totalHours.toFixed(1)}h**`);
 
     if (splitDays.length > 0) {
-        lines.push(`   **Split Session Days:** ${splitDays.join(', ')} - Schedule 2 workouts (AM + PM) on these days.`);
+        lines.push(`   **Split Session Days:** ${splitDays.join(', ')} - Schedule 2 workouts (Morning + Evening) on these days.`);
     }
 
     return lines.join('\n');
@@ -419,7 +419,7 @@ Output **ONLY** a raw CSV string. No JSON. No Markdown. No headers.
 - Example: Target Long Run 15 km → Output 15000 in Distance column
 
 ## COLUMNS
-\`DayIndex, Type, Distance, Duration, Title, StepsString\`
+\`DayIndex, Type, Distance, Duration, Title, Slot, StepsString\`
 
 1. **DayIndex**: Cumulative day from start of block (0 = Day 1 of Week 1, 7 = Day 1 of Week 2, etc).
 2. **Type**: "Run", "Ride", "Rest", "Swim", "Gym".
@@ -427,25 +427,40 @@ Output **ONLY** a raw CSV string. No JSON. No Markdown. No headers.
 3. **Distance**: Integer (meters). 0 for Rest/Gym.
 4. **Duration**: Integer (seconds). 0 for Rest.
 5. **Title**: String. No commas.
-6. **StepsString**: 
+6. **Slot**: "morning" or "evening". Required for split days, optional otherwise.
+   - *Rule:* On days marked as **DUAL SESSION DAY** in availability, output TWO rows with same DayIndex but different Slots.
+   - *Best Practice:* Schedule Gym/Strength in morning, harder cardio in evening.
+7. **StepsString**: 
    - Format: \`Code~Duration(sec)~Intensity\`
    - Codes: \`w\` (Warmup), \`c\` (Cooldown), \`r\` (Run), \`rec\` (Recover).
    - Repeats: \`Nx(r~90~Z5+rec~90~Z1)\`
+
+## DUAL SESSION DAYS (SPLIT SCHEDULING)
+If a day is marked as **DUAL SESSION DAY** in the Daily Time Availability section, you MUST output TWO separate workout rows for that day:
+- One with **Slot=morning** (shorter/strength focused)  
+- One with **Slot=evening** (primary cardio session)
+
+**Example for Split Day (same DayIndex, two Slots):**
+\`\`\`
+3,Gym,0,2400,Morning Strength,morning,w~600~Mobility|r~1800~Strength
+3,Run,8000,3600,Evening Tempo,evening,w~600~Z2|3x(r~480~Z4+rec~180~Z2)|c~600~Z2
+\`\`\`
 
 ## EXAMPLES
 # WEEK 1 CHECK
 # Target Volume: 40 km | Actual Scheduled: 40.5 km | Status: PASS
 # Target Long Run: 12 km | Actual Scheduled: 12 km | Status: PASS
 # Rest Days Required: 2 | Actual Scheduled: 2 | Status: PASS
-0,Run,10000,3600,Easy Run,r~3600~Z2
-1,Gym,0,2700,Strength & Core,w~600~Mobility|r~2100~Strength
-2,Rest,0,0,Rest Day,
-3,Run,12000,4200,Threshold Intervals,w~900~Z1|5x(r~360~Z4+rec~120~Z1)|c~900~Z1
+0,Run,10000,3600,Easy Run,morning,r~3600~Z2
+1,Gym,0,2700,Strength & Core,morning,w~600~Mobility|r~2100~Strength
+2,Rest,0,0,Rest Day,morning,
+3,Run,12000,4200,Threshold Intervals,morning,w~900~Z1|5x(r~360~Z4+rec~120~Z1)|c~900~Z1
 
 **FINAL CHECK:**
 - Does the "Actual Scheduled" match the constraints?
 - Did you schedule a REST DAY as required?
 - Did you output the # Check lines?
+- For split days, did you output TWO rows with matching DayIndex but different Slots?
 `;
 }
 

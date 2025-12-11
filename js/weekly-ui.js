@@ -318,8 +318,8 @@ function renderAIWorkouts(weekIndex, workouts, availability) {
         const dayName = dayNames[dayNum];
         const isLongRun = dayNum === state.longRunDay;
 
-        // Find workout for this day
-        const workout = workouts.find(w => {
+        // Find ALL workouts for this day (supports multiple per day)
+        const dayWorkouts = workouts.filter(w => {
             if (w.start_date_local) {
                 const wDate = new Date(w.start_date_local);
                 const wDay = wDate.getDay();
@@ -328,32 +328,57 @@ function renderAIWorkouts(weekIndex, workouts, availability) {
             return false;
         });
 
-        if (isLongRun) {
-            // Always prioritize the long run structure, but use AI description if available
-            const descUI = workout && workout.description_ui ? workout.description_ui : "Steady aerobic pace, build last 20%";
-            const descExport = workout && workout.description_export ? workout.description_export : descUI;
-            const safeDescExport = (descExport || "").replace(/"/g, '&quot;');
+        // Sort by slot: morning first, then evening
+        dayWorkouts.sort((a, b) => {
+            const slotA = a.slot || 'morning';
+            const slotB = b.slot || 'morning';
+            return slotA === slotB ? 0 : (slotA === 'morning' ? -1 : 1);
+        });
 
-            html += `<div class="p-2 bg-orange-500/10 border border-orange-500/30 rounded" data-description="${safeDescExport}">
-                <div class="text-xs font-bold text-orange-400">${dayName}: Long Run</div>
-                <div class="text-[10px] text-slate-400">${descUI}</div>
-            </div>`;
-        } else if (workout) {
-            // Handle both new format (ui/export) and legacy format (description)
-            const descUI = workout.description_ui || workout.description || "";
-            const descExport = workout.description_export || workout.description || descUI;
-            const safeDescExport = (descExport || "").replace(/"/g, '&quot;');
-
-            html += `<div class="p-2 bg-slate-700/30 rounded" data-description="${safeDescExport}">
-                <div class="text-xs font-bold text-slate-300">${dayName}: ${workout.type}</div>
-                <div class="text-[10px] text-slate-400">${descUI}</div>
-            </div>`;
-        } else {
+        if (dayWorkouts.length === 0) {
             // Fallback if AI missed a day
             html += `<div class="p-2 bg-slate-700/30 rounded opacity-50">
                 <div class="text-xs font-bold text-slate-300">${dayName}: Easy Run</div>
                 <div class="text-[10px] text-slate-400">Easy aerobic run (AI missed this day)</div>
             </div>`;
+        } else {
+            // Render each workout for the day
+            dayWorkouts.forEach((workout, idx) => {
+                const slot = workout.slot || 'morning';
+                const slotIcon = slot === 'evening' ? '🌙' : '☀️';
+                const slotLabel = slot === 'evening' ? 'Evening' : 'Morning';
+                const showSlot = dayWorkouts.length > 1;  // Only show slot label if there are multiple
+
+                const descUI = workout.description_ui || workout.description || "";
+                const descExport = workout.description_export || workout.description || descUI;
+                const safeDescExport = (descExport || "").replace(/"/g, '&quot;');
+
+                // Determine styling
+                let bgClass = 'bg-slate-700/30';
+                let borderClass = '';
+                let titleColor = 'text-slate-300';
+
+                if (isLongRun && workout.type === 'Run' && slot === 'morning') {
+                    bgClass = 'bg-orange-500/10';
+                    borderClass = 'border border-orange-500/30';
+                    titleColor = 'text-orange-400';
+                } else if (workout.type === 'Gym') {
+                    bgClass = 'bg-purple-500/10';
+                    borderClass = 'border border-purple-500/20';
+                    titleColor = 'text-purple-300';
+                }
+
+                const title = isLongRun && workout.type === 'Run' && slot === 'morning'
+                    ? 'Long Run'
+                    : (workout.title || workout.type);
+
+                html += `<div class="p-2 ${bgClass} ${borderClass} rounded ${idx > 0 ? 'ml-2' : ''}" data-description="${safeDescExport}" data-slot="${slot}">
+                    <div class="text-xs font-bold ${titleColor}">
+                        ${dayName}${showSlot ? ` ${slotIcon} ${slotLabel}` : ''}: ${title}
+                    </div>
+                    <div class="text-[10px] text-slate-400">${descUI}</div>
+                </div>`;
+            });
         }
     });
 

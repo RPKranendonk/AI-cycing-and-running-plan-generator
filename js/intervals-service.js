@@ -129,6 +129,10 @@ async function pushWeeksToIntervalsBulk(weekIndices) {
             const dayName = dayNames[dayNum];
             const dateStr = workout.start_date_local.split('T')[0];
 
+            // Use slot for scheduling time: morning=06:00, evening=18:00
+            const slot = workout.slot || 'morning';
+            const timeStr = slot === 'evening' ? '18:00:00' : '06:00:00';
+
             // Construct Description
             let desc = workout.description_export || workout.description_ui || "";
             if (workout.steps && Array.isArray(workout.steps)) {
@@ -137,19 +141,11 @@ async function pushWeeksToIntervalsBulk(weekIndices) {
 
             allEvents.push({
                 category: "WORKOUT",
-                start_date_local: `${dateStr}T06:00:00`,
-                type: "Run", // Default to Run, but let's check sport type if needed, though current logic hardcodes Run in pushToIntervalsICU too? 
-                // Wait, existing pushToIntervalsICU has `type: "Run"` hardcoded on line 57. 
-                // But wait, the user is doing CYCLING. 
-                // Let's check if we should use state.sportType.
-                // The existing code at line 57 says `type: "Run"`. 
-                // However, line 58 says `name: workout.type || "Run"`.
-                // Intervals.icu uses "Ride" for cycling.
-                // Let's improve this to support Cycling properly while we are here.
+                start_date_local: `${dateStr}T${timeStr}`,
                 type: state.sportType === 'Cycling' ? 'Ride' : 'Run',
-                name: workout.type || (state.sportType === 'Cycling' ? 'Ride' : 'Run'),
+                name: workout.type || workout.title || (state.sportType === 'Cycling' ? 'Ride' : 'Run'),
                 description: desc,
-                external_id: `elite_coach_w${week.week}_${dayName}`
+                external_id: `elite_coach_w${week.week}_${dayName}_${slot}`  // Include slot for uniqueness
             });
         });
 
