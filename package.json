@@ -1,0 +1,14 @@
+{
+    "name": "simple-ai-coach",
+    "version": "1.0.0",
+    "description": "AI Coach",
+    "scripts": {
+        "build": "tsc",
+        "test": "node js/verify-build.js"
+    },
+    "devDependencies": {
+        "ts-node": "^10.9.1",
+        "typescript": "^5.2.2",
+        "@types/node": "^20.5.9"
+    }
+}

@@ -8,64 +8,41 @@
  */
 function toggleWeekDetail(weekIndex, element) {
     try {
-        console.log(`toggleWeekDetail called with weekIndex: ${weekIndex}`);
         const detailId = `week-detail-${weekIndex}`;
         let detailDiv = document.getElementById(detailId);
+        const chevron = document.getElementById(`chevron-${weekIndex}`);
 
         if (detailDiv) {
             // Already exists, toggle visibility
-            console.log(`Detail div exists, toggling visibility. Current classes: ${detailDiv.className}`);
             if (detailDiv.classList.contains('hidden')) {
                 detailDiv.classList.remove('hidden');
+                detailDiv.classList.add('animate-slide-up');
+                if (chevron) chevron.classList.add('rotate-90');
                 calculateAndRenderDistribution(weekIndex);
             } else {
                 detailDiv.classList.add('hidden');
+                detailDiv.classList.remove('animate-slide-up');
+                if (chevron) chevron.classList.remove('rotate-90');
             }
             return;
         }
 
         // Create the detail view
-        console.log(`Creating detail view for week ${weekIndex}`);
-
-        // Robust strategy to find the week card
-        let weekCard = null;
-
-        // Strategy 1: Use passed element
-        if (element) {
-            weekCard = element.closest('[data-week-index]');
-            if (weekCard) console.log("Found week card via element.closest");
-        }
-
-        // Strategy 2: Use specific selector
+        let weekCard = element.closest('[data-week-index]');
         if (!weekCard) {
             weekCard = document.querySelector(`[data-week-index="${weekIndex}"]`);
-            if (weekCard) console.log("Found week card via querySelector");
-        }
-
-        // Strategy 3: Search within plan container (fallback)
-        if (!weekCard) {
-            const container = document.getElementById('planContainer');
-            if (container) {
-                const cards = container.querySelectorAll('[data-week-index]');
-                for (let card of cards) {
-                    if (parseInt(card.dataset.weekIndex) === weekIndex) {
-                        weekCard = card;
-                        console.log("Found week card via manual search in container");
-                        break;
-                    }
-                }
-            }
         }
 
         if (!weekCard) {
             console.error(`Week card not found for index ${weekIndex}`);
-            showToast(`Error: Week card ${weekIndex} not found. Please regenerate plan.`);
             return;
         }
 
+        if (chevron) chevron.classList.add('rotate-90');
+
         detailDiv = document.createElement('div');
         detailDiv.id = detailId;
-        detailDiv.className = 'mt-4 p-4 bg-slate-800/50 rounded-lg border border-slate-700';
+        detailDiv.className = 'mt-4 p-4 bg-slate-900/50 rounded-xl border border-white/5 animate-slide-up';
 
         const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
         const dayNumbers = [1, 2, 3, 4, 5, 6, 0]; // Mon-Sun order
@@ -81,20 +58,15 @@ function toggleWeekDetail(weekIndex, element) {
             weekStart = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
         }
 
-        // Calculate distribution to show km per day
-        console.log("Calculating run distribution...");
-        const distribution = calculateRunDistribution(weekIndex);
-        console.log("Distribution calculated:", distribution);
-
-        let html = '<div class="space-y-4">';
+        let html = '<div class="space-y-6">';
 
         // Grid container for side-by-side layout
-        html += '<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">';
+        html += '<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">';
 
         // LEFT SIDE: Weekly Schedule
         html += '<div>';
-        html += '<h4 class="text-sm font-bold text-slate-300 mb-3">Weekly Schedule</h4>';
-        html += '<div class="space-y-1">';
+        html += '<h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Weekly Schedule</h4>';
+        html += '<div class="space-y-2">';
 
         // Create rows for each day
         dayNumbers.forEach(dayNum => {
@@ -102,9 +74,6 @@ function toggleWeekDetail(weekIndex, element) {
             const isChecked = availability.includes(dayNum);
             const isLongRun = dayNum === state.longRunDay;
 
-            // Calculate Date for this day
-            // Monday is 1. If target is 1 (Mon), offset 0.
-            // If target is 0 (Sun), offset 6.
             let offset = 0;
             if (dayNum === 0) offset = 6;
             else offset = dayNum - 1;
@@ -118,28 +87,28 @@ function toggleWeekDetail(weekIndex, element) {
             if (isLongRun) {
                 longRunBadge = `
     <div class="absolute inset-0 flex items-center justify-center">
-        <div class="px-2 py-0.5 bg-orange-500 text-white rounded cursor-move font-bold text-xs shadow-lg"
+        <div class="px-2 py-0.5 bg-orange-500 text-white rounded cursor-move font-bold text-[10px] shadow-lg"
             draggable="true"
             ondragstart="event.dataTransfer.effectAllowed='move'; event.stopPropagation();">
-            Long
+            LONG
         </div>
     </div>`;
             }
 
-            const rowClass = isLongRun ? 'bg-orange-500/20 border border-orange-500/40' : 'bg-slate-700/30';
-            const borderClass = isLongRun ? 'border-orange-500 bg-orange-500/10' : 'border-slate-600 hover:border-slate-500';
+            const rowClass = isLongRun ? 'bg-orange-500/10 border-orange-500/30' : 'bg-white/5 border-white/5';
+            const borderClass = isLongRun ? 'border-orange-500/50 bg-orange-500/10' : 'border-white/10 hover:border-white/20';
 
             html += `
-    <div class="grid grid-cols-[auto_1fr_auto_auto] gap-3 items-center p-2 rounded ${rowClass}">
+    <div class="grid grid-cols-[auto_1fr_auto_auto] gap-3 items-center p-2 rounded-lg border ${rowClass} transition-colors">
         <input type="checkbox"
             data-day="${dayNum}"
             ${isChecked ? 'checked' : ''}
             onchange="updateWeekAvailability(${weekIndex}, ${dayNum}, this.checked)"
             onclick="event.stopPropagation()"
-            class="cursor-pointer">
-            <span class="text-sm text-slate-300">${dayName} <span class="text-xs text-slate-500 ml-1">${dateStr}</span></span>
+            class="cursor-pointer accent-cyan-500 w-4 h-4 rounded border-slate-600 bg-slate-800">
+            <span class="text-sm text-slate-300 font-medium">${dayName} <span class="text-xs text-slate-500 ml-1 font-mono">${dateStr}</span></span>
             <span class="text-sm font-mono text-slate-400"></span>
-            <div class="relative w-20">
+            <div class="relative w-16">
                 <div class="h-6 border-2 border-dashed rounded cursor-pointer transition-all ${borderClass}"
                     data-day="${dayNum}"
                     onclick="setLongRunDay(${weekIndex}, ${dayNum}); event.stopPropagation();"
@@ -157,32 +126,30 @@ function toggleWeekDetail(weekIndex, element) {
         html += '</div>'; // End left side
 
         // RIGHT SIDE: AI Workout Planning Section
-        html += '<div class="lg:col-span-2 p-4 bg-slate-900/50 rounded border border-blue-500/30 h-fit">';
-        html += '<h4 class="text-sm font-bold text-blue-400 mb-3">📋 Weekly Workout Plan</h4>';
+        html += '<div class="lg:col-span-2 flex flex-col">';
+        html += '<h4 class="text-xs font-bold text-cyan-400 uppercase tracking-wider mb-4">AI Workout Plan</h4>';
 
         // Workout summary area
-        html += `<div id="workout-summary-${weekIndex}" class="mb-3 space-y-2 min-h-[120px] max-h-[300px] overflow-y-auto">`;
-        html += '<div class="text-xs text-slate-500 italic">No workouts generated yet. Click "Prepare Week Plan" to generate AI-powered workouts.</div>';
+        html += `<div id="workout-summary-${weekIndex}" class="flex-1 mb-4 space-y-2 min-h-[200px] max-h-[400px] overflow-y-auto custom-scrollbar">`;
+        html += '<div class="text-sm text-slate-500 italic p-4 text-center border border-dashed border-slate-800 rounded-lg">No workouts generated yet. Click "Prepare Week Plan" to generate.</div>';
         html += '</div>';
 
         // Action buttons
-        html += '<div class="space-y-2">';
-        html += '<div class="text-xs text-slate-500 mb-1">Week options: (we recommend building your plan per block and not per week!), </div>';
-        html += `<div class="flex gap-2">
-                    <button type="button" onclick="preparePlanWithAI('week', [${weekIndex}]); event.stopPropagation();" 
-                        class="bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 text-xs font-bold py-1.5 px-3 rounded border border-blue-500/30 transition-colors flex items-center gap-2">
-                        <i class="fa-solid fa-robot"></i> Prepare Week Plan
-                    </button>
-                    <button type="button" onclick="pushToIntervalsICU(${weekIndex}); event.stopPropagation();" 
-                            id="push-btn-${weekIndex}"
-                            class="flex-1 bg-green-600/20 hover:bg-green-600/40 text-green-400 text-[10px] font-bold py-1.5 rounded border border-green-500/30 transition-colors">
-                        Upload week
-                    </button>
-                    <button type="button" onclick="resetWeeklyWorkouts(${weekIndex}); event.stopPropagation();" 
-                            class="flex-1 bg-red-600/20 hover:bg-red-600/40 text-red-400 text-[10px] font-bold py-1.5 rounded border border-red-500/30 transition-colors">
-                        Reset week
-                    </button>
-                 </div>`;
+        html += '<div class="grid grid-cols-3 gap-3 pt-4 border-t border-white/5">';
+        html += `
+            <button type="button" onclick="preparePlanWithAI('week', [${weekIndex}]); event.stopPropagation();" 
+                class="bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 text-xs font-bold py-2 px-4 rounded-lg border border-blue-500/20 transition-colors flex items-center justify-center gap-2">
+                <i class="fa-solid fa-robot"></i> Generate
+            </button>
+            <div class="col-span-2 flex gap-2">
+                <button onclick="pushToIntervalsICU(${weekIndex})" id="push-btn-${weekIndex}" class="flex-1 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 text-xs py-2 rounded transition-colors flex items-center justify-center gap-2 border border-cyan-500/20">
+                    <i class="fa-solid fa-cloud-arrow-up"></i> Push to Intervals.icu
+                </button>
+                <button onclick="resetRemoteWeeklyWorkouts(${weekIndex})" class="px-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs py-2 rounded transition-colors border border-red-500/20" title="Clear workouts from Intervals.icu (Keeps local plan)">
+                    <i class="fa-solid fa-trash-can"></i> Clear Remote
+                </button>
+            </div>
+        `;
         html += '</div>';
         html += '</div>'; // End right side
 
@@ -191,7 +158,6 @@ function toggleWeekDetail(weekIndex, element) {
 
         detailDiv.innerHTML = html;
         weekCard.appendChild(detailDiv);
-        console.log(`Detail view appended for week ${weekIndex}`);
 
         calculateAndRenderDistribution(weekIndex);
 
@@ -333,6 +299,13 @@ function renderAIWorkouts(weekIndex, workouts, availability) {
     const dayNumbers = [1, 2, 3, 4, 5, 6, 0]; // Mon-Sun order
 
     let html = '';
+    console.log(`Rendering workouts for Week ${weekIndex + 1}`, workouts);
+
+    if (!workouts || workouts.length === 0) {
+        console.warn(`No workouts found for Week ${weekIndex + 1}`);
+        container.innerHTML = '<div class="text-sm text-slate-500 italic p-4 text-center border border-dashed border-slate-800 rounded-lg">No workouts generated yet. Click "Prepare Week Plan" to generate.</div>';
+        return;
+    }
 
     // Sort availability to display in Mon-Sun order
     const sortedAvailability = [...availability].sort((a, b) => {
@@ -359,17 +332,19 @@ function renderAIWorkouts(weekIndex, workouts, availability) {
             // Always prioritize the long run structure, but use AI description if available
             const descUI = workout && workout.description_ui ? workout.description_ui : "Steady aerobic pace, build last 20%";
             const descExport = workout && workout.description_export ? workout.description_export : descUI;
+            const safeDescExport = (descExport || "").replace(/"/g, '&quot;');
 
-            html += `<div class="p-2 bg-orange-500/10 border border-orange-500/30 rounded" data-description="${descExport.replace(/"/g, '&quot;')}">
+            html += `<div class="p-2 bg-orange-500/10 border border-orange-500/30 rounded" data-description="${safeDescExport}">
                 <div class="text-xs font-bold text-orange-400">${dayName}: Long Run</div>
                 <div class="text-[10px] text-slate-400">${descUI}</div>
             </div>`;
         } else if (workout) {
             // Handle both new format (ui/export) and legacy format (description)
-            const descUI = workout.description_ui || workout.description;
-            const descExport = workout.description_export || workout.description;
+            const descUI = workout.description_ui || workout.description || "";
+            const descExport = workout.description_export || workout.description || descUI;
+            const safeDescExport = (descExport || "").replace(/"/g, '&quot;');
 
-            html += `<div class="p-2 bg-slate-700/30 rounded" data-description="${descExport.replace(/"/g, '&quot;')}">
+            html += `<div class="p-2 bg-slate-700/30 rounded" data-description="${safeDescExport}">
                 <div class="text-xs font-bold text-slate-300">${dayName}: ${workout.type}</div>
                 <div class="text-[10px] text-slate-400">${descUI}</div>
             </div>`;
@@ -442,10 +417,16 @@ function renderWeeklyPlan() {
 
     container.innerHTML = '';
 
+    const emptyState = document.getElementById('emptyStateContainer');
+
     if (!state.generatedPlan || state.generatedPlan.length === 0) {
-        container.innerHTML = '<div class="text-center text-slate-500 p-8">No plan generated yet. Configure your settings to get started.</div>';
+        if (emptyState) emptyState.classList.remove('hidden');
+        container.classList.add('hidden');
         return;
     }
+
+    if (emptyState) emptyState.classList.add('hidden');
+    container.classList.remove('hidden');
 
     const isCycling = state.sportType === 'Cycling';
     const volLabel = isCycling ? 'Load' : 'Volume';
@@ -458,14 +439,12 @@ function renderWeeklyPlan() {
     let currentBlock = null;
 
     state.generatedPlan.forEach((week, index) => {
-        // Group by Block Number (calculated in planning logic)
-        // This ensures that "Base Phase" block 1 and "Base Phase" block 2 are separate.
         const blockKey = week.blockNum || week.phaseName;
 
         if (!currentBlock || currentBlock.id !== blockKey) {
             currentBlock = {
                 id: blockKey,
-                name: week.phaseName, // Use the phase name of the first week
+                name: week.phaseName,
                 weeks: [],
                 isOpen: true
             };
@@ -480,11 +459,12 @@ function renderWeeklyPlan() {
 
         // Block Container
         const blockDiv = document.createElement('div');
-        blockDiv.className = 'mb-4 bg-slate-900/30 rounded-xl border border-slate-800 overflow-hidden';
+        blockDiv.className = 'glass-panel rounded-2xl overflow-hidden animate-fade-in mb-6';
+        blockDiv.style.animationDelay = `${blockIndex * 0.1}s`;
 
-        // Block Header (Click to toggle)
+        // Block Header
         const header = document.createElement('div');
-        header.className = 'p-3 bg-slate-800/80 flex items-center justify-between cursor-pointer hover:bg-slate-800 transition-colors';
+        header.className = 'p-4 bg-white/5 flex items-center justify-between cursor-pointer hover:bg-white/10 transition-colors border-b border-white/5';
         header.onclick = () => {
             const content = document.getElementById(`content-${blockId}`);
             const icon = document.getElementById(`icon-${blockId}`);
@@ -497,104 +477,118 @@ function renderWeeklyPlan() {
             }
         };
 
-        // Determine Block Color based on name
+        // Determine Block Color
         let blockColorClass = 'text-slate-300';
-        if (block.name.includes('Base')) blockColorClass = 'text-blue-400';
-        if (block.name.includes('Build')) blockColorClass = 'text-green-400';
+        if (block.name.includes('Base')) blockColorClass = 'text-cyan-400';
+        if (block.name.includes('Build')) blockColorClass = 'text-emerald-400';
         if (block.name.includes('Peak')) blockColorClass = 'text-purple-400';
         if (block.name.includes('Taper')) blockColorClass = 'text-yellow-400';
         if (block.name.includes('Race')) blockColorClass = 'text-red-400';
         if (block.name.includes('Recovery')) blockColorClass = 'text-teal-400';
 
-        // Calculate Block Totals
         const totalVol = block.weeks.reduce((sum, w) => sum + (parseFloat(w.mileage) || 0), 0);
         const duration = block.weeks.length;
 
         header.innerHTML = `
-            <div class="flex items-center gap-3">
-                <i class="fa-solid fa-chevron-down transition-transform duration-300 rotate-180 text-slate-500" id="icon-${blockId}"></i>
+            <div class="flex items-center gap-4">
+                <div class="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center">
+                    <i class="fa-solid fa-chevron-down transition-transform duration-300 rotate-180 text-slate-400 text-xs" id="icon-${blockId}"></i>
+                </div>
                 <div>
-                    <h3 class="font-bold ${blockColorClass} text-sm">${block.name}</h3>
-                    <div class="text-[10px] text-slate-500">${duration} Weeks • Total ${Math.round(totalVol)} ${volUnit}</div>
+                    <h3 class="font-bold ${blockColorClass} text-lg tracking-tight">${block.name}</h3>
+                    <div class="text-xs text-slate-500 font-mono">${duration} Weeks • Total ${Math.round(totalVol)} ${volUnit}</div>
                 </div>
             </div>
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2">
                 <button onclick="event.stopPropagation(); prepareBlockWorkouts(${blockIndex})" 
-                    class="text-[10px] bg-slate-700 hover:bg-blue-600 text-white px-2 py-1 rounded transition-colors border border-slate-600">
-                    <i class="fa-solid fa-wand-magic-sparkles mr-1"></i> Prepare Block
+                    class="px-3 py-1.5 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-all text-xs font-bold flex items-center gap-2">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> <span class="hidden sm:inline">Prepare</span>
                 </button>
                 <button onclick="event.stopPropagation(); pushBlockWorkouts(${blockIndex})" 
-                    class="text-[10px] bg-slate-700 hover:bg-green-600 text-white px-2 py-1 rounded transition-colors border border-slate-600">
-                    <i class="fa-solid fa-cloud-arrow-up mr-1"></i> Push Block
+                    class="px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all text-xs font-bold flex items-center gap-2">
+                    <i class="fa-solid fa-cloud-arrow-up"></i> <span class="hidden sm:inline">Push</span>
                 </button>
                 <button onclick="event.stopPropagation(); deleteFutureWorkouts(${blockIndex})" 
-                    class="text-[10px] bg-slate-700 hover:bg-red-600 text-white px-2 py-1 rounded transition-colors border border-slate-600">
-                    <i class="fa-solid fa-trash mr-1"></i> Clear Future
+                    class="px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-all text-xs font-bold flex items-center gap-2">
+                    <i class="fa-solid fa-trash"></i>
                 </button>
-                <div class="text-[10px] font-mono text-slate-500">
-                    ${block.weeks[0].date} - ${block.weeks[block.weeks.length - 1].date}
-                </div>
             </div>
         `;
 
         // Block Content (Weeks)
         const content = document.createElement('div');
         content.id = `content-${blockId}`;
-        content.className = 'p-2 space-y-2'; // Default Open
+        content.className = 'p-4 space-y-3';
 
         block.weeks.forEach(week => {
             const index = week.originalIndex;
             const weekCard = document.createElement('div');
-            weekCard.className = 'bg-slate-800/50 rounded-lg border border-slate-700/50 p-3 transition-all hover:border-slate-600';
+            weekCard.className = 'glass-card rounded-xl p-4 cursor-pointer group';
             weekCard.dataset.weekIndex = index;
+            // Note: We don't attach onclick here because the header inside will handle it, 
+            // or we can attach it to the card but prevent propagation on buttons.
+            // Let's attach to the card for better UX.
+            weekCard.onclick = (e) => {
+                // Only toggle if clicking the header or a child of the header
+                if (e.target.closest('.week-header')) {
+                    toggleWeekDetail(index, e.currentTarget);
+                }
+            };
 
-            // Determine Phase Color (for inner badge)
+            // Phase Badge
             let phaseColor = 'text-slate-400';
-            let phaseBg = 'bg-slate-700/50';
-            let phaseBorder = 'border-slate-600';
+            let phaseBg = 'bg-slate-800';
 
-            if (week.phaseName.includes('Base')) { phaseColor = 'text-blue-400'; phaseBg = 'bg-blue-900/20'; phaseBorder = 'border-blue-500/30'; }
-            else if (week.phaseName.includes('Build')) { phaseColor = 'text-green-400'; phaseBg = 'bg-green-900/20'; phaseBorder = 'border-green-500/30'; }
-            else if (week.phaseName.includes('Peak')) { phaseColor = 'text-purple-400'; phaseBg = 'bg-purple-900/20'; phaseBorder = 'border-purple-500/30'; }
-            else if (week.phaseName.includes('Taper')) { phaseColor = 'text-yellow-400'; phaseBg = 'bg-yellow-900/20'; phaseBorder = 'border-yellow-500/30'; }
-            else if (week.phaseName.includes('Race')) { phaseColor = 'text-red-400'; phaseBg = 'bg-red-900/20'; phaseBorder = 'border-red-500/30'; }
-            else if (week.weekName.includes('Recovery')) { phaseColor = 'text-teal-400'; phaseBg = 'bg-teal-900/20'; phaseBorder = 'border-teal-500/30'; }
+            if (week.phaseName.includes('Base')) { phaseColor = 'text-cyan-400'; phaseBg = 'bg-cyan-950/30 border-cyan-500/20'; }
+            else if (week.phaseName.includes('Build')) { phaseColor = 'text-emerald-400'; phaseBg = 'bg-emerald-950/30 border-emerald-500/20'; }
+            else if (week.phaseName.includes('Peak')) { phaseColor = 'text-purple-400'; phaseBg = 'bg-purple-950/30 border-purple-500/20'; }
+            else if (week.phaseName.includes('Taper')) { phaseColor = 'text-yellow-400'; phaseBg = 'bg-yellow-950/30 border-yellow-500/20'; }
+            else if (week.phaseName.includes('Race')) { phaseColor = 'text-red-400'; phaseBg = 'bg-red-950/30 border-red-500/20'; }
+            else if (week.weekName.includes('Recovery')) { phaseColor = 'text-teal-400'; phaseBg = 'bg-teal-950/30 border-teal-500/20'; }
+
+            // Get weekly note if exists
+            const weekNote = state.weeklyNotes && state.weeklyNotes[index] ? state.weeklyNotes[index].note : null;
+            const noteHtml = weekNote ? `
+                <div class="mt-2 p-2 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                    <div class="text-[10px] text-amber-400 flex items-center gap-1">
+                        <i class="fa-solid fa-lightbulb"></i> Coach Note
+                    </div>
+                    <div class="text-xs text-amber-200/80">${weekNote}</div>
+                </div>` : '';
 
             const headerHtml = `
-                <div class="flex items-center justify-between cursor-pointer" onclick="toggleWeekDetail(${index}, this)">
-                    <div class="flex items-center gap-3">
-                        <div class="flex flex-col items-center justify-center w-10 h-10 rounded-lg ${phaseBg} ${phaseBorder} border">
-                            <span class="text-[9px] text-slate-400 uppercase">W</span>
-                            <span class="text-sm font-bold ${phaseColor}">${week.week}</span>
+                <div class="week-header flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <div class="flex flex-col items-center justify-center w-12 h-12 rounded-xl bg-slate-800/50 border border-white/5 group-hover:border-white/10 transition-colors">
+                            <span class="text-[10px] text-slate-500 font-bold uppercase">Week</span>
+                            <span class="text-lg font-bold text-white">${week.week}</span>
                         </div>
                         <div>
-                            <div class="flex items-center gap-2">
-                                <span class="text-xs font-bold text-slate-300">${week.weekName}</span>
-                                <span class="text-[9px] px-1.5 py-0.5 rounded-full ${phaseBg} ${phaseColor} border ${phaseBorder}">${week.focus}</span>
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="text-sm font-bold text-white group-hover:text-cyan-400 transition-colors">${week.weekName}</span>
+                                <span class="text-[10px] px-2 py-0.5 rounded-full border ${phaseBg} ${phaseColor} font-bold uppercase tracking-wider">${week.focus}</span>
                             </div>
-                            <div class="text-[10px] text-slate-500 mt-0.5 flex items-center gap-2">
-                                <span><i class="fa-regular fa-calendar mr-1"></i> ${week.date}</span>
+                            <div class="text-xs text-slate-500 flex items-center gap-2 font-mono">
+                                <i class="fa-regular fa-calendar"></i> ${week.date}
                             </div>
+                            ${noteHtml}
                         </div>
                     </div>
                     
-                    <div class="flex items-center gap-4">
-                        <div class="text-right">
-                            <div class="text-[9px] text-slate-500 uppercase tracking-wider">${volLabel}</div>
-                            <div class="font-mono font-bold text-sm text-slate-200">${week.mileage} <span class="text-[9px] text-slate-500">${volUnit}</span></div>
+                    <div class="flex items-center gap-6">
+                        <div class="text-right hidden sm:block">
+                            <div class="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-0.5">${volLabel}</div>
+                            <div class="font-mono font-bold text-lg text-white leading-none">${week.mileage} <span class="text-xs text-slate-500 font-normal">${volUnit}</span></div>
                         </div>
                         <div class="text-right hidden sm:block">
-                            <div class="text-[9px] text-slate-500 uppercase tracking-wider">${lrLabel}</div>
-                            <div class="font-mono font-bold text-sm text-slate-200">${week.longRun} <span class="text-[9px] text-slate-500">${lrUnit}</span></div>
+                            <div class="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-0.5">${lrLabel}</div>
+                            <div class="font-mono font-bold text-lg text-white leading-none">${week.longRun} <span class="text-xs text-slate-500 font-normal">${lrUnit}</span></div>
                         </div>
-                        <div class="w-6 h-6 flex items-center justify-center rounded-full bg-slate-700/50 text-slate-400 hover:bg-slate-700 hover:text-white transition-colors">
-                            <i class="fa-solid fa-chevron-down transition-transform duration-300 text-xs" id="chevron-${index}"></i>
+                        <div class="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-slate-400 group-hover:bg-cyan-500 group-hover:text-white transition-all">
+                            <i class="fa-solid fa-chevron-right text-xs transition-transform duration-300" id="chevron-${index}"></i>
                         </div>
                     </div>
                 </div>
-                
-                <!-- Week Detail (Hidden) -->
-
             `;
 
             weekCard.innerHTML = headerHtml;
@@ -619,9 +613,9 @@ async function prepareBlockWorkouts(blockIndex) {
     const blocks = [];
     let currentBlock = null;
     state.generatedPlan.forEach((week, index) => {
-        let blockName = week.phaseName;
-        if (!currentBlock || currentBlock.name !== blockName) {
-            currentBlock = { name: blockName, weeks: [] };
+        const blockKey = week.blockNum || week.phaseName;
+        if (!currentBlock || currentBlock.id !== blockKey) {
+            currentBlock = { id: blockKey, name: week.phaseName, weeks: [] };
             blocks.push(currentBlock);
         }
         currentBlock.weeks.push({ ...week, originalIndex: index });
@@ -630,25 +624,24 @@ async function prepareBlockWorkouts(blockIndex) {
     const targetBlock = blocks[blockIndex];
     if (!targetBlock) return showToast("Block not found");
 
-    if (!confirm(`Prepare detailed workouts for all ${targetBlock.weeks.length} weeks in "${targetBlock.name}"? This may take a minute.`)) return;
+    showConfirm("Prepare Block Plan", `Prepare detailed workouts for all ${targetBlock.weeks.length} weeks in "${targetBlock.name}"? This may take a minute.`, async () => {
+        showToast(`🪄 Preparing ${targetBlock.weeks.length} weeks for ${targetBlock.name}...`);
 
-    showToast(`🪄 Preparing ${targetBlock.weeks.length} weeks for ${targetBlock.name}...`);
+        try {
+            // Collect all week indices
+            const weekIndices = targetBlock.weeks.map(w => w.originalIndex);
+            console.log(`[Block Debug] Preparing block "${targetBlock.name}" with indices:`, weekIndices);
 
-    showToast(`🪄 Preparing ${targetBlock.weeks.length} weeks for ${targetBlock.name}...`);
+            // Call AI once for the whole block
+            await preparePlanWithAI('block', weekIndices);
 
-    try {
-        // Collect all week indices
-        const weekIndices = targetBlock.weeks.map(w => w.originalIndex);
+        } catch (e) {
+            console.error(`Error preparing block ${targetBlock.name}:`, e);
+            showToast(`❌ Error preparing block`);
+        }
 
-        // Call AI once for the whole block
-        await preparePlanWithAI('block', weekIndices);
-
-    } catch (e) {
-        console.error(`Error preparing block ${targetBlock.name}:`, e);
-        showToast(`❌ Error preparing block`);
-    }
-
-    showToast(`✅ Block "${targetBlock.name}" ready!`);
+        showToast(`✅ Block "${targetBlock.name}" ready!`);
+    });
 }
 
 async function pushBlockWorkouts(blockIndex) {
@@ -658,9 +651,9 @@ async function pushBlockWorkouts(blockIndex) {
     const blocks = [];
     let currentBlock = null;
     state.generatedPlan.forEach((week, index) => {
-        let blockName = week.phaseName;
-        if (!currentBlock || currentBlock.name !== blockName) {
-            currentBlock = { name: blockName, weeks: [] };
+        const blockKey = week.blockNum || week.phaseName;
+        if (!currentBlock || currentBlock.id !== blockKey) {
+            currentBlock = { id: blockKey, name: week.phaseName, weeks: [] };
             blocks.push(currentBlock);
         }
         currentBlock.weeks.push({ ...week, originalIndex: index });
@@ -669,22 +662,22 @@ async function pushBlockWorkouts(blockIndex) {
     const targetBlock = blocks[blockIndex];
     if (!targetBlock) return showToast("Block not found");
 
-    if (!confirm(`Upload all workouts for "${targetBlock.name}" to Intervals.icu?`)) return;
+    showConfirm("Upload Block", `Upload all workouts for "${targetBlock.name}" to Intervals.icu?`, async () => {
+        showToast(`🚀 Uploading ${targetBlock.weeks.length} weeks...`);
 
-    showToast(`🚀 Uploading ${targetBlock.weeks.length} weeks...`);
+        try {
+            // Collect all week indices
+            const weekIndices = targetBlock.weeks.map(w => w.originalIndex);
 
-    try {
-        // Collect all week indices
-        const weekIndices = targetBlock.weeks.map(w => w.originalIndex);
+            // Use new Bulk Upload function
+            await pushWeeksToIntervalsBulk(weekIndices);
 
-        // Use new Bulk Upload function
-        await pushWeeksToIntervalsBulk(weekIndices);
-
-        showToast(`✅ Block "${targetBlock.name}" uploaded!`);
-    } catch (e) {
-        console.error("Block upload failed:", e);
-        // Toast already shown by pushWeeksToIntervalsBulk
-    }
+            showToast(`✅ Block "${targetBlock.name}" uploaded!`);
+        } catch (e) {
+            console.error("Block upload failed:", e);
+            // Toast already shown by pushWeeksToIntervalsBulk
+        }
+    });
 }
 
 async function deleteFutureWorkouts(blockIndex) {
@@ -694,9 +687,9 @@ async function deleteFutureWorkouts(blockIndex) {
     const blocks = [];
     let currentBlock = null;
     state.generatedPlan.forEach((week, index) => {
-        let blockName = week.phaseName;
-        if (!currentBlock || currentBlock.name !== blockName) {
-            currentBlock = { name: blockName, weeks: [] };
+        const blockKey = week.blockNum || week.phaseName;
+        if (!currentBlock || currentBlock.id !== blockKey) {
+            currentBlock = { id: blockKey, name: week.phaseName, weeks: [] };
             blocks.push(currentBlock);
         }
         currentBlock.weeks.push({ ...week, originalIndex: index });
@@ -705,22 +698,54 @@ async function deleteFutureWorkouts(blockIndex) {
     const targetBlock = blocks[blockIndex];
     if (!targetBlock) return showToast("Block not found");
 
-    if (!confirm(`Delete all future workouts for "${targetBlock.name}"? This cannot be undone.`)) return;
+    showConfirm("Clear Block", `Delete ALL workouts for "${targetBlock.name}"? \n\nThis will remove workouts from:\n1. The Local Plan\n2. Intervals.icu (Remote)\n\nThis cannot be undone.`, async () => {
+        showToast(`🗑️ Clearing workouts for ${targetBlock.name}...`);
 
-    showToast(`🗑️ Clearing workouts for ${targetBlock.name}...`);
+        for (const week of targetBlock.weeks) {
+            try {
+                // 1. Clear Remote (Intervals.icu)
+                // We assume resetRemoteWeeklyWorkouts is available globally or we can replicate its logic
+                if (typeof resetRemoteWeeklyWorkouts === 'function') {
+                    await resetRemoteWeeklyWorkouts(week.originalIndex, true); // true = skip confirm
+                }
 
-    for (const week of targetBlock.weeks) {
-        try {
-            // Assuming resetWeeklyWorkouts exists and clears the week
-            if (typeof resetWeeklyWorkouts === 'function') {
-                resetWeeklyWorkouts(week.originalIndex);
+                // 2. Clear Local
+                if (typeof resetWeeklyWorkouts === 'function') {
+                    resetWeeklyWorkouts(week.originalIndex, true); // true = skip confirm
+                }
+            } catch (e) {
+                console.error(`Error clearing week ${week.week}:`, e);
             }
-        } catch (e) {
-            console.error(`Error clearing week ${week.week}:`, e);
         }
-    }
 
-    showToast(`✅ Block "${targetBlock.name}" cleared!`);
+        showToast(`✅ Block "${targetBlock.name}" cleared!`);
+    });
 }
 
 
+
+/**
+ * Resets/Clears workouts for a specific week
+ */
+function resetWeeklyWorkouts(weekIndex, skipConfirm = false) {
+    const doReset = () => {
+        if (state.generatedWorkouts && state.generatedWorkouts[weekIndex]) {
+            delete state.generatedWorkouts[weekIndex];
+
+            // Re-render the week's workout section
+            const availability = state.weeklyAvailability[weekIndex] || state.defaultAvailableDays;
+            renderAIWorkouts(weekIndex, [], availability);
+
+            showToast("Week cleared");
+        }
+    };
+
+    if (skipConfirm) {
+        doReset();
+    } else {
+        showConfirm("Reset Week", "Are you sure you want to clear the workouts for this week?", doReset);
+    }
+}
+
+// Expose globally
+window.resetWeeklyWorkouts = resetWeeklyWorkouts;

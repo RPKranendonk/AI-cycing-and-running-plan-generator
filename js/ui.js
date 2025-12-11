@@ -1,51 +1,169 @@
 // ==========================================
 // UI LOGIC: DOM MANIPULATION & INTERACTION
 // ==========================================
+// NOTE: Modal functions (openSetup, closeSetup, showToast, showAILoading, etc.)
+// have been moved to js/ui/modals.js
+// TRAINING_TIPS moved to js/core/constants.js
+// ==========================================
+console.log("UI.js: Loading...");
 
-// --- SETUP MODAL HELPERS ---
-function openSetup() {
-    document.getElementById('setupModal').classList.remove('hidden');
-    document.getElementById('setupModal').classList.add('flex');
-    if (typeof toggleProgressionSidePanel === 'function') toggleProgressionSidePanel(false);
+// --- TIME AVAILABILITY SLIDER FUNCTIONS ---
+
+/**
+ * Updates the display when a day's hour slider changes
+ */
+function updateDayHours(dayNum) {
+    const slider = document.getElementById(`hoursDay${dayNum}`);
+    const display = document.getElementById(`hoursDisplay${dayNum}`);
+    if (slider && display) {
+        const val = parseFloat(slider.value);
+        display.textContent = `${val.toFixed(1)}h`;
+
+        // If split is enabled, distribute between AM/PM
+        const splitCheckbox = document.getElementById(`splitDay${dayNum}`);
+        if (splitCheckbox && splitCheckbox.checked) {
+            const amInput = document.getElementById(`amHours${dayNum}`);
+            const pmInput = document.getElementById(`pmHours${dayNum}`);
+            if (amInput && pmInput) {
+                // Keep AM as is, adjust PM
+                const amVal = parseFloat(amInput.value) || 0;
+                const pmVal = Math.max(0, val - amVal);
+                pmInput.value = pmVal.toFixed(1);
+            }
+        }
+    }
+    updateWeeklyTotal();
 }
-function closeSetup() { document.getElementById('setupModal').classList.add('hidden'); }
-function showToast(msg) {
-    const t = document.getElementById('toast');
-    const msgEl = document.getElementById('toastMsg');
-    if (t && msgEl) {
-        msgEl.innerText = msg;
-        t.classList.remove('translate-x-full');
-        setTimeout(() => t.classList.add('translate-x-full'), 3000);
+window.updateDayHours = updateDayHours;
+
+/**
+ * Toggles the AM/PM split inputs for a day
+ */
+function toggleSplitDay(dayNum) {
+    const splitInputs = document.getElementById(`splitInputs${dayNum}`);
+    const splitCheckbox = document.getElementById(`splitDay${dayNum}`);
+    const slider = document.getElementById(`hoursDay${dayNum}`);
+
+    if (splitInputs && splitCheckbox) {
+        if (splitCheckbox.checked) {
+            splitInputs.classList.remove('hidden');
+            splitInputs.classList.add('flex');
+
+            // Initialize AM/PM values based on total
+            if (slider) {
+                const total = parseFloat(slider.value) || 0;
+                const amInput = document.getElementById(`amHours${dayNum}`);
+                const pmInput = document.getElementById(`pmHours${dayNum}`);
+                if (amInput && pmInput) {
+                    // Default: 1/3 AM, 2/3 PM
+                    const amVal = Math.min(1.0, total * 0.33);
+                    amInput.value = amVal.toFixed(1);
+                    pmInput.value = (total - amVal).toFixed(1);
+                }
+            }
+        } else {
+            splitInputs.classList.add('hidden');
+            splitInputs.classList.remove('flex');
+        }
     }
 }
+window.toggleSplitDay = toggleSplitDay;
 
-function showAILoading(message = "Generating AI Plan...") {
-    const overlay = document.getElementById('aiLoadingOverlay');
-    const messageEl = document.getElementById('loadingMessage');
-    if (overlay) {
-        if (messageEl) messageEl.textContent = message;
-        overlay.classList.remove('hidden');
+/**
+ * Updates the main slider when AM/PM inputs change
+ */
+function updateSplitHours(dayNum) {
+    const amInput = document.getElementById(`amHours${dayNum}`);
+    const pmInput = document.getElementById(`pmHours${dayNum}`);
+    const slider = document.getElementById(`hoursDay${dayNum}`);
+    const display = document.getElementById(`hoursDisplay${dayNum}`);
+
+    if (amInput && pmInput && slider && display) {
+        const amVal = parseFloat(amInput.value) || 0;
+        const pmVal = parseFloat(pmInput.value) || 0;
+        const total = amVal + pmVal;
+
+        // Cap at max slider value
+        const maxVal = parseFloat(slider.max);
+        const finalTotal = Math.min(total, maxVal);
+
+        slider.value = finalTotal;
+        display.textContent = `${finalTotal.toFixed(1)}h`;
+    }
+    updateWeeklyTotal();
+}
+window.updateSplitHours = updateSplitHours;
+
+/**
+ * Calculates and displays the weekly total hours
+ */
+function updateWeeklyTotal() {
+    let total = 0;
+    for (let day = 0; day <= 6; day++) {
+        const slider = document.getElementById(`hoursDay${day}`);
+        if (slider) {
+            total += parseFloat(slider.value) || 0;
+        }
+    }
+    const display = document.getElementById('weeklyTotalHours');
+    if (display) {
+        display.textContent = `${total.toFixed(1)}h`;
     }
 }
+window.updateWeeklyTotal = updateWeeklyTotal;
 
-function hideAILoading() {
-    const overlay = document.getElementById('aiLoadingOverlay');
-    if (overlay) {
-        overlay.classList.add('hidden');
+/**
+ * Collects all availability data from the UI into an object
+ * @returns {Object} dailyAvailability object
+ */
+function collectDailyAvailability() {
+    const availability = {};
+    for (let day = 0; day <= 6; day++) {
+        const slider = document.getElementById(`hoursDay${day}`);
+        const splitCheckbox = document.getElementById(`splitDay${day}`);
+        const amInput = document.getElementById(`amHours${day}`);
+        const pmInput = document.getElementById(`pmHours${day}`);
+
+        const hours = slider ? parseFloat(slider.value) || 0 : 0;
+        const split = splitCheckbox ? splitCheckbox.checked : false;
+        const amHours = amInput ? parseFloat(amInput.value) || 0 : 0;
+        const pmHours = pmInput ? parseFloat(pmInput.value) || 0 : 0;
+
+        availability[day] = {
+            hours,
+            split,
+            amHours: split ? amHours : hours,
+            pmHours: split ? pmHours : 0
+        };
     }
+    return availability;
 }
+window.collectDailyAvailability = collectDailyAvailability;
 
 function toggleProviderFields() {
     const provider = document.getElementById('aiProviderSelect').value;
     const openaiField = document.getElementById('openai-field');
     const geminiField = document.getElementById('gemini-field');
+    const deepseekField = document.getElementById('deepseek-field');
+    const openrouterField = document.getElementById('openrouter-field');
+    const mistralField = document.getElementById('mistral-field');
+
+    openaiField.classList.add('hidden');
+    geminiField.classList.add('hidden');
+    deepseekField.classList.add('hidden');
+    if (openrouterField) openrouterField.classList.add('hidden');
+    if (mistralField) mistralField.classList.add('hidden');
 
     if (provider === 'openai') {
         openaiField.classList.remove('hidden');
-        geminiField.classList.add('hidden');
-    } else {
-        openaiField.classList.add('hidden');
+    } else if (provider === 'gemini') {
         geminiField.classList.remove('hidden');
+    } else if (provider === 'deepseek') {
+        deepseekField.classList.remove('hidden');
+    } else if (provider === 'openrouter') {
+        document.getElementById('openrouter-field').classList.remove('hidden');
+    } else if (provider === 'mistral') {
+        document.getElementById('mistral-field').classList.remove('hidden');
     }
 }
 
@@ -53,6 +171,67 @@ function toggleProviderFields() {
 function getVal(id, defaultVal = "") {
     const el = document.getElementById(id);
     return el ? el.value : defaultVal;
+}
+
+// --- GOAL TOGGLE LOGIC ---
+function toggleGoalType(type) {
+    const eventBtn = document.getElementById('goal-event-btn');
+    const fitnessBtn = document.getElementById('goal-fitness-btn');
+    const raceDateContainer = document.getElementById('raceDateContainer');
+    const fitnessDurationContainer = document.getElementById('fitnessDurationContainer');
+    const input = document.getElementById('trainingGoalInput');
+
+    if (type === 'event') {
+        eventBtn.classList.add('bg-cyan-500/20', 'text-cyan-400', 'shadow-lg');
+        eventBtn.classList.remove('text-slate-400', 'hover:text-white');
+
+        fitnessBtn.classList.remove('bg-cyan-500/20', 'text-cyan-400', 'shadow-lg');
+        fitnessBtn.classList.add('text-slate-400', 'hover:text-white');
+
+        raceDateContainer.classList.remove('hidden');
+        fitnessDurationContainer.classList.add('hidden');
+        input.value = 'event';
+    } else {
+        fitnessBtn.classList.add('bg-cyan-500/20', 'text-cyan-400', 'shadow-lg');
+        fitnessBtn.classList.remove('text-slate-400', 'hover:text-white');
+
+        eventBtn.classList.remove('bg-cyan-500/20', 'text-cyan-400', 'shadow-lg');
+        eventBtn.classList.add('text-slate-400', 'hover:text-white');
+
+        raceDateContainer.classList.add('hidden');
+        fitnessDurationContainer.classList.remove('hidden');
+        input.value = 'fitness';
+    }
+}
+window.toggleGoalType = toggleGoalType;
+
+function initLivePreviewListeners() {
+    const previewInputs = [
+        'raceDateInput', 'planStartDateInputRun', 'planStartDateInputCycle',
+        'target-volume', 'target-long-run-run', 'progressionRateInputRun',
+        'start-tss', 'target-long-run', 'progressionRateInputCycle',
+        'trainingGoalInput', 'raceTypeInput', 'raceTypeInputCycle',
+        'goal-event-btn', 'goal-fitness-btn' // Also trigger on buttons if they change hidden input
+    ];
+
+    previewInputs.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('change', viewProgressionFromInputs);
+            el.addEventListener('input', viewProgressionFromInputs);
+        }
+    });
+
+    // Special case for buttons since they don't fire input events directly on the hidden field
+    document.getElementById('goal-event-btn')?.addEventListener('click', () => setTimeout(viewProgressionFromInputs, 50));
+    document.getElementById('goal-fitness-btn')?.addEventListener('click', () => setTimeout(viewProgressionFromInputs, 50));
+}
+
+// Call on load
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initLivePreviewListeners);
+} else {
+    initLivePreviewListeners();
 }
 
 // --- CONFIGURATOR FLOW LOGIC ---
@@ -90,16 +269,55 @@ async function checkConnectionAndHistory() {
 
         const data = await res.json();
 
+        // DEBUG: Log full data to verify fields
+        console.log("Intervals.icu Athlete Data:", data);
+
+        // VALIDATION: Check for Name and DOB
+        const hasName = data.firstname && data.lastname;
+        // User found 'icu_date_of_birth' in docs. We check that first, then fallbacks.
+        const dobString = data.icu_date_of_birth || data.dateOfBirth || data.dob;
+        const hasDob = !!dobString;
+
+        if (!hasName || !hasDob) {
+            if (statusBox) {
+                statusBox.innerHTML = `
+                    <div class="text-amber-400 font-bold mb-2"><i class="fa-solid fa-triangle-exclamation"></i> Missing Profile Info</div>
+                    <div class="text-sm text-slate-300 mb-2">
+                        We could not find your <b>${!hasName ? 'Name' : ''} ${!hasName && !hasDob ? 'and' : ''} ${!hasDob ? 'Birthdate' : ''}</b> in Intervals.icu.
+                    </div>
+                    <div class="text-xs text-slate-400 mb-4">
+                        Please go to <a href="https://intervals.icu/settings" target="_blank" class="text-blue-400 underline">Intervals.icu Settings</a>, update your profile, and try again.
+                    </div>
+                `;
+            }
+            return; // Stop execution
+        }
+
         state.athleteName = `${data.firstname} ${data.lastname}`;
         state.athleteId = data.id;
+
+        // Calculate Age from DOB (yyyy-MM-dd)
+        let age = null;
+        if (dobString) {
+            const dobDate = new Date(dobString);
+            const today = new Date();
+            age = today.getFullYear() - dobDate.getFullYear();
+            const m = today.getMonth() - dobDate.getMonth();
+            if (m < 0 || (m === 0 && today.getDate() < dobDate.getDate())) {
+                age--;
+            }
+        }
+        state.athleteAge = age;
+        state.gender = data.sex; // Capture Gender
 
         // Update UI with resolved ID
         const idInput = document.getElementById('athleteIdInput');
         if (idInput) idInput.value = data.id;
 
         if (statusBox) {
+            const ageText = state.athleteAge ? ` (${state.athleteAge} years old)` : '';
             statusBox.innerHTML = `
-                <div class="text-green-400 font-bold"><i class="fa-solid fa-check"></i> Connected as ${state.athleteName}</div>
+                <div class="text-green-400 font-bold"><i class="fa-solid fa-check"></i> Connected as ${state.athleteName}${ageText}</div>
             `;
         }
 
@@ -131,6 +349,14 @@ async function checkConnectionAndHistory() {
 
         if (planStartRun && !planStartRun.value) planStartRun.valueAsDate = targetDate;
         if (planStartCycle && !planStartCycle.value) planStartCycle.valueAsDate = targetDate;
+
+        // Pre-fill Race Date (Default 12 weeks out)
+        const raceDateInput = document.getElementById('raceDateInput');
+        if (raceDateInput && !raceDateInput.value) {
+            const defaultRaceDate = new Date(targetDate);
+            defaultRaceDate.setDate(defaultRaceDate.getDate() + (12 * 7)); // 12 weeks
+            raceDateInput.valueAsDate = defaultRaceDate;
+        }
 
         // Pre-fill Start Long Run (Max from last 4 weeks)
         if (state.activities && state.activities.length > 0) {
@@ -164,47 +390,172 @@ async function checkConnectionAndHistory() {
 }
 
 function calculateAndShowPlan() {
-    // Trigger the progression view logic
-    viewProgressionFromInputs();
+    // Legacy wrapper if called from HTML
+    generateAndCloseModal();
+}
 
-    // Ensure side panel is visible (viewProgressionFromInputs does this, but let's be explicit if needed)
-    // Also, if sport changes, we might want to hide the plan?
-    // The user said: "When I change sport afterwards it should dissappear again."
-    // This is handled in toggleSportFields.
+// --- Sport Selection ---
+function populateSportDropdown() {
+    console.log("UI: populateSportDropdown called");
+    const select = document.getElementById('sportTypeInput');
+    if (!select) {
+        console.error("UI: #sportTypeInput not found");
+        return;
+    }
+
+    // Retry if registry not ready
+    if (!window.sportRegistry || window.sportRegistry.getAllAdapters().length === 0) {
+        console.warn("UI: Registry empty or missing, retrying in 100ms...");
+        setTimeout(populateSportDropdown, 100);
+        return;
+    }
+
+    select.innerHTML = '';
+    const sports = window.sportRegistry.getSports();
+
+    if (sports.length === 0) {
+        console.warn("UI: No sports found in registry even after check");
+        return;
+    }
+
+    sports.forEach(sport => {
+        const option = document.createElement('option');
+        option.value = sport;
+        option.textContent = sport;
+        select.appendChild(option);
+    });
+
+    // Set selected value if in state, otherwise default to 'Running'
+    if (state.sportType && sports.includes(state.sportType)) {
+        select.value = state.sportType;
+    } else {
+        select.value = 'Running';
+        state.sportType = 'Running';
+    }
+
+    console.log(`UI: Sports populated. Selected: ${select.value}`);
+
+    // Ensure fields are toggled for the default/current selection
+    toggleSportFields(select.value);
+
+    // Remove existing listeners to avoid duplicates (naive approach, better to use named function)
+    const newSelect = select.cloneNode(true);
+    select.parentNode.replaceChild(newSelect, select);
+
+    newSelect.addEventListener('change', (e) => {
+        toggleSportFields(e.target.value);
+
+        // Auto-reload Smart Analysis if API keys are present
+        const apiKey = document.getElementById('apiKeyInput').value.trim();
+        const athleteId = document.getElementById('athleteIdInput').value.trim();
+
+        if (apiKey && athleteId && window.calculateSmartBlock) {
+            // Clear previous results to indicate reload
+            document.getElementById('weekly-breakdown').textContent = 'Switching sport...';
+            // Small delay to allow UI to update
+            setTimeout(() => {
+                window.calculateSmartBlock();
+            }, 100);
+        }
+    });
 }
 
 function toggleSportFields() {
     const sport = document.getElementById('sportTypeInput').value;
-    const cyclingContainer = document.getElementById('cycling-config-container');
-    const runningContainer = document.getElementById('running-config-container');
-
-    // Race Goal Distance Containers
-    const runDistanceContainer = document.getElementById('runDistanceContainer');
-    const cycleDistanceContainer = document.getElementById('cycleDistanceContainer');
 
     // Update State
     state.sportType = sport;
     localStorage.setItem('elite_sportType', sport);
 
-    // Hide Plan Configuration (Step 4) and Action (Step 5) to force reset/re-check
-    document.getElementById('step-4-inputs').classList.add('hidden');
-    document.getElementById('step-5-plan-action').classList.add('hidden');
-    document.getElementById('progressionSidePanel').classList.add('hidden');
+    // Dynamic Toggle using Registry
+    if (window.sportRegistry) {
+        const adapters = window.sportRegistry.getAllAdapters();
+        const activeAdapter = window.sportRegistry.getAdapter(sport);
 
-    if (sport === 'Cycling') {
-        if (cyclingContainer) cyclingContainer.classList.remove('hidden');
-        if (runningContainer) runningContainer.classList.add('hidden');
+        // Hide all containers first
+        adapters.forEach(adapter => {
+            const containerId = adapter.getConfigContainerId();
+            const el = document.getElementById(containerId);
+            if (el) el.classList.add('hidden');
+        });
 
-        // Toggle Distance Fields
-        if (runDistanceContainer) runDistanceContainer.classList.add('hidden');
-        if (cycleDistanceContainer) cycleDistanceContainer.classList.remove('hidden');
-    } else {
-        if (cyclingContainer) cyclingContainer.classList.add('hidden');
-        if (runningContainer) runningContainer.classList.remove('hidden');
+        // Update UI for Sport
+        const runContainer = document.getElementById('running-config-container');
+        const cycleContainer = document.getElementById('cycling-config-container');
 
-        // Toggle Distance Fields
-        if (runDistanceContainer) runDistanceContainer.classList.remove('hidden');
-        if (cycleDistanceContainer) cycleDistanceContainer.classList.add('hidden');
+        if (sport === 'Cycling') {
+            if (runContainer) runContainer.classList.add('hidden');
+            if (cycleContainer) cycleContainer.classList.remove('hidden');
+        } else {
+            // Default to Running for any other sport for now (or specific logic)
+            if (cycleContainer) cycleContainer.classList.add('hidden');
+            if (runContainer) runContainer.classList.remove('hidden');
+        }
+
+        // Trigger preview update if available
+        if (typeof viewProgressionFromInputs === 'function') {
+            viewProgressionFromInputs();
+        }
+
+        // Update Experience Label
+        const expLabel = document.getElementById('lbl-selected-sport');
+        if (expLabel) expLabel.textContent = sport;
+
+        // Re-apply experience settings for the new sport
+        applyExperienceSettings();
+    }
+}
+
+function applyExperienceSettings() {
+    const sport = document.getElementById('sportTypeInput').value;
+    const experience = document.querySelector('input[name="athleteExperience"]:checked')?.value;
+
+    if (!experience) return;
+
+    // Running Inputs
+    const progRateRun = document.getElementById('progressionRateInputRun');
+    const longRunProg = document.getElementById('longRunProgressionInput');
+
+    // Cycling Inputs
+    const rampRateCycle = document.getElementById('progressionRateInputCycle');
+
+    if (sport === 'Running') {
+        if (progRateRun && longRunProg) {
+            switch (experience) {
+                case 'fresh_start':
+                case 'transfer':
+                    progRateRun.value = "0.05";
+                    longRunProg.value = "1.0";
+                    break;
+                case 'consistent':
+                    progRateRun.value = "0.075";
+                    longRunProg.value = "1.5";
+                    break;
+                case 'high_performance':
+                    progRateRun.value = "0.10";
+                    longRunProg.value = "2.0";
+                    break;
+            }
+        }
+    } else if (sport === 'Cycling') {
+        if (rampRateCycle) {
+            switch (experience) {
+                case 'fresh_start':
+                    rampRateCycle.value = "3";
+                    break;
+                case 'transfer':
+                    rampRateCycle.value = "5";
+                    break;
+                case 'consistent':
+                    rampRateCycle.value = "4"; // Note: 6 is not in the original options (3,5,8), but I added 3-10.
+                    break;
+                case 'high_performance':
+                    rampRateCycle.value = "6";
+                    break;
+            }
+            // Trigger change event to update warning visibility
+            rampRateCycle.dispatchEvent(new Event('change'));
+        }
     }
 }
 
@@ -217,6 +568,12 @@ function updateGoalFeedback() {
     const feedbackContainer = document.getElementById('goalFeedback');
 
     if (!feedbackContainer) return;
+
+    const goalType = document.getElementById('trainingGoalInput') ? document.getElementById('trainingGoalInput').value : 'event';
+    if (goalType === 'fitness') {
+        feedbackContainer.classList.add('hidden');
+        return;
+    }
 
     if (!goalTime || !raceDate) {
         feedbackContainer.classList.add('hidden');
@@ -325,6 +682,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialize UI State
     toggleSportFields();
+
+    // Ramp Rate Warning Logic
+    const rampRateInput = document.getElementById('progressionRateInputCycle');
+    const rampRateWarning = document.getElementById('rampRateWarning');
+
+    if (rampRateInput && rampRateWarning) {
+        const checkRampRate = () => {
+            const val = parseInt(rampRateInput.value);
+            if (val >= 8) {
+                rampRateWarning.classList.remove('hidden');
+            } else {
+                rampRateWarning.classList.add('hidden');
+            }
+        };
+
+        rampRateInput.addEventListener('change', checkRampRate);
+        // Check on load
+        checkRampRate();
+    }
+
+    // Athlete Experience Listeners
+    const experienceRadios = document.querySelectorAll('input[name="athleteExperience"]');
+    experienceRadios.forEach(radio => {
+        radio.addEventListener('change', applyExperienceSettings);
+    });
 });
 
 // --- API TESTS ---
@@ -346,9 +728,45 @@ async function testIntervalsConnection() {
         if (!res.ok) throw new Error("Connection Failed");
         const data = await res.json();
 
+        // DEBUG: Log full data to verify fields
+        console.log("Intervals.icu Athlete Data:", data);
+
+        // VALIDATION: Check for Name and DOB
+        const hasName = data.firstname && data.lastname;
+        // User found 'icu_date_of_birth' in docs. We check that first, then fallbacks.
+        const dobString = data.icu_date_of_birth || data.dateOfBirth || data.dob;
+        const hasDob = !!dobString;
+
+        if (!hasName || !hasDob) {
+            statusBox.innerHTML = `
+                <div class="text-amber-400 font-bold mb-2"><i class="fa-solid fa-triangle-exclamation"></i> Missing Profile Info</div>
+                <div class="text-sm text-slate-300 mb-2">
+                    We could not find your <b>${!hasName ? 'Name' : ''} ${!hasName && !hasDob ? 'and' : ''} ${!hasDob ? 'Birthdate' : ''}</b> in Intervals.icu.
+                </div>
+                <div class="text-xs text-slate-400 mb-4">
+                    Please go to <a href="https://intervals.icu/settings" target="_blank" class="text-blue-400 underline">Intervals.icu Settings</a>, update your profile, and try again.
+                </div>
+            `;
+            return; // Stop execution
+        }
+
         state.athleteName = `${data.firstname} ${data.lastname}`;
         state.apiKey = apiKey;
         state.athleteId = data.id;
+
+        // Calculate Age from DOB (yyyy-MM-dd)
+        let age = null;
+        if (dobString) {
+            const dobDate = new Date(dobString);
+            const today = new Date();
+            age = today.getFullYear() - dobDate.getFullYear();
+            const m = today.getMonth() - dobDate.getMonth();
+            if (m < 0 || (m === 0 && today.getDate() < dobDate.getDate())) {
+                age--;
+            }
+        }
+        state.athleteAge = age;
+        state.gender = data.sex; // Capture Gender
 
         // Set Default Dates
         const today = new Date();
@@ -372,9 +790,10 @@ async function testIntervalsConnection() {
         document.getElementById('raceDateInput').valueAsDate = raceDate;
         document.getElementById('athleteIdInput').value = data.id;
 
+        const ageText = state.athleteAge ? ` (${state.athleteAge} years old)` : '';
         statusBox.innerHTML = `
             <div class="space-y-1">
-                <div class="text-green-400 font-bold"><i class="fa-solid fa-check"></i> Connected as ${state.athleteName}</div>
+                <div class="text-green-400 font-bold"><i class="fa-solid fa-check"></i> Connected as ${state.athleteName}${ageText}</div>
             </div>
         `;
 
@@ -392,88 +811,134 @@ function testAIContext() {
 }
 
 function saveSettings() {
-    state.apiKey = getVal('apiKeyInput').trim();
-    state.athleteId = getVal('athleteIdInput').trim();
-    state.trainingHistory = getVal('historyInput');
-    state.injuries = getVal('injuriesInput');
-    state.gymAccess = getVal('gymAccessInput');
-    state.trainingPreferences = getVal('preferencesInput');
+    try {
+        state.apiKey = getVal('apiKeyInput').trim();
+        state.athleteId = getVal('athleteIdInput').trim();
+        state.trainingHistory = getVal('historyInput');
+        state.injuries = getVal('injuriesInput');
+        state.gymAccess = getVal('gymAccessInput');
+        state.trainingPreferences = getVal('preferencesInput');
 
-    // New Smart Planner Inputs
-    state.startingVolume = getVal('target-volume');
-    state.startingLongRun = getVal('target-long-run');
-    state.startWithRestWeek = document.getElementById('use-rest-week') ? document.getElementById('use-rest-week').checked : false;
+        // New Smart Planner Inputs
+        state.startingVolume = getVal('target-volume');
+        // Fix: Read correct Long Run input
+        state.startingLongRun = state.sportType === 'Cycling' ? getVal('target-long-run') : getVal('target-long-run-run');
+        state.startWithRestWeek = document.getElementById('use-rest-week') ? document.getElementById('use-rest-week').checked : false;
 
-    state.aiApiKey = getVal('aiApiKeyInput');
-    state.geminiApiKey = getVal('geminiApiKeyInput');
-    state.aiProvider = getVal('aiProviderSelect');
-    state.raceDate = getVal('raceDateInput');
-    state.goalTime = getVal('goalTimeInput');
+        state.aiApiKey = getVal('aiApiKeyInput');
+        state.geminiApiKey = getVal('geminiApiKeyInput');
+        state.deepseekApiKey = getVal('deepseekApiKeyInput');
+        state.openRouterApiKey = getVal('openRouterApiKeyInput');
+        state.mistralApiKey = getVal('mistralApiKeyInput');
+        state.aiProvider = getVal('aiProviderSelect');
+        state.goalTime = getVal('goalTimeInput');
 
-    // Sport & Distance Logic
-    state.sportType = getVal('sportTypeInput', 'Running');
+        // Sport & Distance Logic
+        state.sportType = getVal('sportTypeInput', 'Running');
 
-    if (state.sportType === "Cycling") {
-        const dist = getVal('cycleDistanceInput');
-        state.raceType = dist ? `${dist}km Ride` : "Cycling";
-    } else {
-        state.raceType = getVal('raceTypeInput', 'Marathon');
+        // Goal Type Logic
+        const goalType = document.getElementById('trainingGoalInput').value;
+        let raceDateVal = getVal('raceDateInput');
+
+        if (goalType === 'fitness') {
+            // Calculate 16 weeks from Plan Start
+            let startDateInputId = state.sportType === 'Cycling' ? 'planStartDateInputCycle' : 'planStartDateInputRun';
+            const startDateStr = getVal(startDateInputId);
+
+            if (startDateStr) {
+                const start = new Date(startDateStr);
+                const end = new Date(start);
+                end.setDate(start.getDate() + (16 * 7)); // 16 weeks
+                raceDateVal = end.toISOString().split('T')[0];
+                // Update input so other functions see it
+                document.getElementById('raceDateInput').value = raceDateVal;
+            }
+        }
+        state.raceDate = raceDateVal;
+
+        if (state.sportType === "Cycling") {
+            state.raceType = getVal('raceTypeInputCycle', 'General Fitness');
+        } else {
+            state.raceType = getVal('raceTypeInput', 'Marathon');
+        }
+
+        // Sync Configurator Inputs
+        // Sync Configurator Inputs
+        state.taperDuration = document.getElementById('taperDurationInput') ? parseInt(document.getElementById('taperDurationInput').value) : 3;
+        state.longRunProgression = document.getElementById('longRunProgressionInput') ? parseFloat(document.getElementById('longRunProgressionInput').value) : 2.0;
+
+        if (state.sportType === 'Cycling') {
+            state.rampRate = document.getElementById('progressionRateInputCycle') ? parseInt(document.getElementById('progressionRateInputCycle').value) : 5;
+            state.progressionRate = null;
+        } else {
+            state.progressionRate = document.getElementById('progressionRateInputRun') ? parseFloat(document.getElementById('progressionRateInputRun').value) : 0.075;
+            state.rampRate = null;
+        }
+
+        state.startTss = document.getElementById('start-tss') ? parseInt(document.getElementById('start-tss').value) : null;
+
+        localStorage.setItem('elite_apiKey', state.apiKey);
+        localStorage.setItem('elite_athleteId', state.athleteId);
+        localStorage.setItem('elite_raceDate', state.raceDate);
+        localStorage.setItem('elite_goalTime', state.goalTime);
+        localStorage.setItem('elite_raceType', state.raceType);
+        localStorage.setItem('elite_sportType', state.sportType);
+        localStorage.setItem('elite_rampRate', state.rampRate);
+        localStorage.setItem('elite_startTss', state.startTss);
+        localStorage.setItem('elite_aiApiKey', state.aiApiKey);
+        localStorage.setItem('elite_geminiApiKey', state.geminiApiKey);
+        localStorage.setItem('elite_deepseekApiKey', state.deepseekApiKey);
+        localStorage.setItem('elite_openRouterApiKey', state.openRouterApiKey);
+        localStorage.setItem('elite_mistralApiKey', state.mistralApiKey);
+        localStorage.setItem('elite_aiProvider', state.aiProvider);
+        localStorage.setItem('elite_trainingHistory', state.trainingHistory);
+        localStorage.setItem('elite_injuries', state.injuries);
+        localStorage.setItem('elite_gymAccess', state.gymAccess);
+        localStorage.setItem('elite_trainingPreferences', state.trainingPreferences);
+        localStorage.setItem('elite_taperDuration', state.taperDuration);
+        localStorage.setItem('elite_longRunProgression', state.longRunProgression);
+        localStorage.setItem('elite_longRunProgression', state.longRunProgression);
+        localStorage.setItem('elite_progressionRate', state.progressionRate);
+        localStorage.setItem('elite_gender', state.gender); // Persist Gender
+
+        const cfEl = document.getElementById('current-fitness');
+        state.currentFitness = cfEl ? cfEl.value : (state.currentFitness || 40);
+        localStorage.setItem('elite_currentFitness', state.currentFitness);
+
+        // Persist Smart Planner Inputs
+        localStorage.setItem('elite_startingVolume', state.startingVolume);
+        localStorage.setItem('elite_startingLongRun', state.startingLongRun);
+        localStorage.setItem('elite_startWithRestWeek', state.startWithRestWeek);
+
+        // Collect and persist daily availability (new slider-based system)
+        if (typeof collectDailyAvailability === 'function') {
+            state.dailyAvailability = collectDailyAvailability();
+            localStorage.setItem('elite_dailyAvail', JSON.stringify(state.dailyAvailability));
+
+            // Also compute defaultAvailableDays from days with hours > 0
+            const days = [];
+            for (let d = 0; d <= 6; d++) {
+                if (state.dailyAvailability[d] && state.dailyAvailability[d].hours > 0) {
+                    days.push(d);
+                }
+            }
+            state.defaultAvailableDays = days;
+            localStorage.setItem('elite_defaultDays', JSON.stringify(days));
+        }
+
+
+        const lrDayEl = document.getElementById('longRunDayInput');
+        state.longRunDay = lrDayEl ? parseInt(lrDayEl.value) : 0;
+        localStorage.setItem('elite_longRunDay', state.longRunDay);
+
+        showToast("Configuration Saved");
+
+        // Generate and Close
+        generateAndCloseModal();
+    } catch (e) {
+        console.error("Error saving settings:", e);
+        showToast("Error saving settings: " + e.message);
     }
-
-    // Sync Configurator Inputs
-    state.taperDuration = document.getElementById('taperDurationInput') ? parseInt(document.getElementById('taperDurationInput').value) : 3;
-    state.longRunProgression = document.getElementById('longRunProgressionInput') ? parseFloat(document.getElementById('longRunProgressionInput').value) : 2.0;
-    state.progressionRate = document.getElementById('progressionRateInput') ? parseFloat(document.getElementById('progressionRateInput').value) : 0.10;
-    state.rampRate = document.getElementById('rampRateInput') ? parseInt(document.getElementById('rampRateInput').value) : 5;
-    state.startTss = document.getElementById('startTssInput') ? parseInt(document.getElementById('startTssInput').value) : null;
-
-    localStorage.setItem('elite_apiKey', state.apiKey);
-    localStorage.setItem('elite_athleteId', state.athleteId);
-    localStorage.setItem('elite_raceDate', state.raceDate);
-    localStorage.setItem('elite_goalTime', state.goalTime);
-    localStorage.setItem('elite_raceDate', state.raceDate);
-    localStorage.setItem('elite_goalTime', state.goalTime);
-    localStorage.setItem('elite_raceType', state.raceType);
-    localStorage.setItem('elite_sportType', state.sportType);
-    localStorage.setItem('elite_rampRate', state.rampRate);
-    localStorage.setItem('elite_startTss', state.startTss);
-    localStorage.setItem('elite_aiApiKey', state.aiApiKey);
-    localStorage.setItem('elite_geminiApiKey', state.geminiApiKey);
-    localStorage.setItem('elite_aiProvider', state.aiProvider);
-    localStorage.setItem('elite_trainingHistory', state.trainingHistory);
-    localStorage.setItem('elite_injuries', state.injuries);
-    localStorage.setItem('elite_gymAccess', state.gymAccess);
-    localStorage.setItem('elite_trainingPreferences', state.trainingPreferences);
-    localStorage.setItem('elite_taperDuration', state.taperDuration);
-    localStorage.setItem('elite_longRunProgression', state.longRunProgression);
-    localStorage.setItem('elite_longRunProgression', state.longRunProgression);
-    localStorage.setItem('elite_progressionRate', state.progressionRate);
-
-    state.currentFitness = document.getElementById('current-fitness').value;
-    localStorage.setItem('elite_currentFitness', state.currentFitness);
-
-    // Persist Smart Planner Inputs
-    localStorage.setItem('elite_startingVolume', state.startingVolume);
-    localStorage.setItem('elite_startingLongRun', state.startingLongRun);
-    localStorage.setItem('elite_startWithRestWeek', state.startWithRestWeek);
-
-    const days = [];
-    const dayMapping = [1, 2, 3, 4, 5, 6, 0];
-    ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].forEach((d, i) => {
-        if (document.getElementById(`day${d}`).checked) days.push(dayMapping[i]);
-    });
-    state.defaultAvailableDays = days;
-    localStorage.setItem('elite_defaultDays', JSON.stringify(days));
-
-    state.longRunDay = parseInt(document.getElementById('longRunDayInput').value);
-    localStorage.setItem('elite_longRunDay', state.longRunDay);
-
-    showToast("Configuration Saved");
-    closeSetup();
-
-    // Re-run the main generation logic
-    generateTrainingPlan();
-    renderWeeklyPlan();
 }
 
 // ==========================================
@@ -493,159 +958,79 @@ function toggleProgressionSidePanel(show) {
     }
 }
 
-function viewProgressionFromInputs() {
-    // Get Inputs
-    const sportType = state.sportType || 'Running';
-    let vol, lr, startDate;
+function generateAndCloseModal() {
+    console.log("generateAndCloseModal called");
+    try {
+        // 1. Generate the plan (updates state.generatedPlan)
+        if (window.generateTrainingPlan) {
+            console.log("Calling generateTrainingPlan...");
+            window.generateTrainingPlan();
+            console.log("generateTrainingPlan returned. Plan length:", state.generatedPlan ? state.generatedPlan.length : "null");
+        } else {
+            console.error("generateTrainingPlan not found");
+            showToast("Error: Generator not found");
+            return;
+        }
 
-    if (sportType === 'Cycling') {
-        // Cycling Inputs
-        vol = parseFloat(document.getElementById('current-fitness').value) || 0;
-        lr = parseFloat(document.getElementById('target-long-run').value) || 0;
-        startDate = document.getElementById('planStartDateInputCycle').value;
-    } else {
-        // Running Inputs
-        vol = parseFloat(document.getElementById('target-volume').value) || 0;
-        lr = parseFloat(document.getElementById('target-long-run-run').value) || 0;
-        startDate = document.getElementById('planStartDateInputRun').value;
+        // 2. Render the main weekly view
+        if (window.renderWeeklyPlan) {
+            console.log("Calling renderWeeklyPlan...");
+            window.renderWeeklyPlan();
+        }
+
+        // 3. Close setup modal
+        closeSetup();
+    } catch (e) {
+        console.error("Error generating plan:", e);
+        showToast("Error generating plan: " + e.message);
+        // Optional: Close anyway? Or let user fix inputs?
+        // Let's keep it open so they can see the error and fix it.
     }
-
-    const raceDate = document.getElementById('raceDateInput').value;
-
-    if (!startDate || !raceDate) return;
-
-    generateProgressionCalendar(vol, lr, raceDate, startDate);
-    toggleProgressionSidePanel(true);
 }
 
-function generateProgressionCalendar(startVol, startLR, raceDateStr, planStartDateStr) {
-    const container = document.getElementById('progression-calendar-content');
+// NOTE: Modal functions (closeSetup, openSetup) are now in ui/modals.js
+// Debug functions (updateDebugPrompt, etc.) are defined at the bottom of this file
+window.saveSettings = saveSettings;
+
+
+function viewProgressionFromInputs() {
+    // Generate plan in memory
+    if (window.generateTrainingPlan) window.generateTrainingPlan();
+
+    // Render the preview inside the modal
+    if (typeof renderProgressionSidePanel === 'function') {
+        renderProgressionSidePanel();
+    }
+}
+
+function renderProgressionSidePanel() {
+    const sportType = state.sportType || 'Running';
+    const isCycling = (sportType === 'Cycling');
+
+    // Target correct container based on sport
+    const containerId = isCycling ? 'progression-preview-cycle' : 'progression-preview-run';
+    const container = document.getElementById(containerId);
+
     if (!container) {
-        console.error("progression-calendar-content container not found!");
+        console.warn(`Progression container #${containerId} not found`);
         return;
     }
 
-    // Get options from UI
-    const startWithRestWeek = document.getElementById('use-rest-week') ? document.getElementById('use-rest-week').checked : false;
-    const raceType = document.getElementById('raceTypeInput') ? document.getElementById('raceTypeInput').value : "Marathon";
-    const sportType = document.getElementById('sportTypeInput') ? document.getElementById('sportTypeInput').value : "Running";
-    const isCycling = sportType === "Cycling";
-
-    let taperDuration, longRunProgression, progressionRate;
-
-    if (isCycling) {
-        taperDuration = document.getElementById('taperDurationInputCycle') ? parseInt(document.getElementById('taperDurationInputCycle').value) : 1;
-        progressionRate = document.getElementById('progressionRateInputCycle') ? parseFloat(document.getElementById('progressionRateInputCycle').value) : 5;
-        // longRunProgression not used for cycling
-    } else {
-        taperDuration = document.getElementById('taperDurationInputRun') ? parseInt(document.getElementById('taperDurationInputRun').value) : 3;
-        progressionRate = document.getElementById('progressionRateInputRun') ? parseFloat(document.getElementById('progressionRateInputRun').value) : 0.10;
-        longRunProgression = document.getElementById('longRunProgressionInput') ? parseFloat(document.getElementById('longRunProgressionInput').value) : 2.0;
+    let adapter = null;
+    if (window.sportRegistry) {
+        adapter = window.sportRegistry.getAdapter(sportType);
     }
 
-    // Initialize customRestWeeks in state if not present
-    if (!state.customRestWeeks) {
-        state.customRestWeeks = [];
-    }
-    // Initialize forceBuildWeeks in state if not present
-    if (!state.forceBuildWeeks) {
-        state.forceBuildWeeks = [];
-    }
+    // const isCycling = (sportType === 'Cycling'); // Already defined above
+    const volUnit = adapter ? adapter.getVolumeUnit() : (isCycling ? 'TSS' : 'km');
+    const lrLabel = adapter ? adapter.getLongSessionLabel() : (isCycling ? 'Long Ride' : 'Long Run');
+    const lrUnit = isCycling ? 'h' : 'km';
 
-    const options = {
-        progressionRate: progressionRate,
-        startWithRestWeek: startWithRestWeek,
-        taperDuration: taperDuration,
-        longRunProgression: longRunProgression,
-        customRestWeeks: state.customRestWeeks,
-        forceBuildWeeks: state.forceBuildWeeks,
-        raceType: raceType
-    };
+    const plan = state.generatedPlan;
+    if (!plan || plan.length === 0) return;
 
-    let plan = [];
-
-    // Get Plan Start Date (default to Today if not set)
-    const planStartDate = planStartDateStr ? new Date(planStartDateStr) : new Date();
-    planStartDate.setHours(0, 0, 0, 0);
-
-    // Calculate Total Weeks based on Plan Start Date
-    const msPerWeek = 1000 * 60 * 60 * 24 * 7;
-    const rDate = new Date(raceDateStr);
-    rDate.setHours(0, 0, 0, 0);
-
-    if (isNaN(rDate.getTime()) || isNaN(planStartDate.getTime())) return;
-
-    const totalWeeks = Math.ceil((rDate - planStartDate) / msPerWeek);
-
-    // Safety Check: Prevent massive loops if dates are far apart (e.g. user typing year 202)
-    if (totalWeeks > 104 || totalWeeks < 1) { // Max 2 years
-        container.innerHTML = '<div class="text-red-400 text-center p-4">Invalid Date Range (Check Year)</div>';
-        return;
-    }
-
-    if (isCycling) {
-        // Calculate Total Weeks (Already done above)
-
-        // Get Inputs
-        const currentCtl = parseFloat(document.getElementById('current-fitness').value) || 40;
-        const rampRate = parseInt(document.getElementById('progressionRateInputCycle').value) || 5;
-        const startLongRide = parseFloat(document.getElementById('target-long-run').value) || 1.5;
-        const longRideCap = 4.0;
-        const taperDurationCycle = parseInt(document.getElementById('taperDurationInputCycle').value) || 1;
-
-        const cyclingOptions = {
-            rampRate: rampRate,
-            taperDuration: taperDurationCycle,
-            longRideCap: longRideCap,
-            customRestWeeks: state.customRestWeeks || [],
-            forceBuildWeeks: state.forceBuildWeeks || [],
-            startWithRestWeek: startWithRestWeek,
-            planStartDate: planStartDate
-        };
-
-        const advancedPlan = calculateAdvancedCyclingPlan(
-            currentCtl, // startTss (using CTL as proxy for start load logic in function)
-            currentCtl, // currentCtl
-            raceDateStr,
-            cyclingOptions,
-            startLongRide
-        );
-
-        // Map to UI structure
-        plan = advancedPlan.map(w => {
-            const weekStart = new Date(planStartDate);
-            weekStart.setDate(planStartDate.getDate() + ((w.week - 1) * 7));
-            return {
-                week: w.week,
-                blockType: w.isRecovery ? "Recovery" : "Build",
-                weekName: w.weekName,
-                phaseName: w.phaseName,
-                startDateObj: weekStart,
-                startDate: weekStart.toISOString(),
-                mileage: w.mileage, // Correct property from planning-cycling.js
-                rawKm: w.rawKm, // Correct property from planning-cycling.js
-                longRun: w.longRun, // Correct property from planning-cycling.js
-                isRaceWeek: w.isRaceWeek // Use the calculated property
-            };
-        });
-
-    } else {
-        plan = calculateMarathonPlan(startVol, startLR, raceDateStr, planStartDate, options);
-    }
-
-    // Save the plan to state so it can be used by the final generation step
-    state.generatedPlan = plan;
-
-    if (!plan || plan.length === 0) {
-        container.innerHTML = '<div class="text-red-400 text-center p-4">Race date is in the past or too close!</div>';
-        return;
-    }
-
-    // Pre-fill customRestWeeks based on the plan's suggestions (only on first run/reset)
-    // Actually, better to just let the checkboxes reflect the plan state.
-
-    let html = '<div class="grid grid-cols-7 gap-1 text-[10px] font-bold text-slate-400 border-b border-slate-700 pb-1 mb-1 text-center">';
-    html += `<div>Week</div><div>Date</div><div>Phase</div><div>Rest?</div><div>${isCycling ? 'Load' : 'Volume'}</div><div>${isCycling ? 'Long Ride' : 'Long Run'}</div></div>`;
+    let html = '<div class="grid grid-cols-6 gap-1 text-[10px] font-bold text-slate-400 border-b border-slate-700 pb-1 mb-1 text-center">';
+    html += `<div>Week</div><div>Date</div><div>Phase</div><div>Rest?</div><div>${volUnit}</div><div>${lrLabel}</div></div>`;
 
     // Track gaps
     let lastRestWeek = 0;
@@ -714,10 +1099,6 @@ function generateProgressionCalendar(startVol, startLR, raceDateStr, planStartDa
         if (week.isRaceWeek || week.blockType === "Taper" || week.blockType === "Peak") {
             isDisabled = true;
         }
-        // User requested to unblock the last recovery week
-        // if (index === lastRecoveryWeekIndex) {
-        //    isDisabled = true; // Last Recovery Week is mandatory
-        // }
 
         if (!week.isRaceWeek) {
             const isChecked = isRest ? 'checked' : '';
@@ -753,18 +1134,13 @@ function generateProgressionCalendar(startVol, startLR, raceDateStr, planStartDa
             if (weekNum === 1) {
                 const startRestCheckbox = document.getElementById('use-rest-week');
                 if (startRestCheckbox) {
-                    // Update the UI element without triggering the event listener loop
-                    // We just want the visual state to match
                     startRestCheckbox.checked = e.target.checked;
-
-                    // If we uncheck Week 1, we might want to reset the "Conservative/Aggressive" inputs?
-                    // Or just let the user handle it. The main issue was the loop.
-                    // Let's NOT dispatch the event here, just sync the checked state.
                 }
             }
 
             if (e.target.checked) {
                 // Add to custom list
+                if (!state.customRestWeeks) state.customRestWeeks = [];
                 if (!state.customRestWeeks.includes(weekNum)) {
                     state.customRestWeeks.push(weekNum);
                 }
@@ -780,6 +1156,7 @@ function generateProgressionCalendar(startVol, startLR, raceDateStr, planStartDa
                     state.forceBuildWeeks.push(weekNum);
                 }
             }
+            // Re-calculate and show
             viewProgressionFromInputs();
         });
     });
@@ -821,11 +1198,15 @@ function exportConfiguration() {
             apiKey: state.apiKey,
             athleteId: state.athleteId,
             athleteName: state.athleteName, // Added
+            gender: state.gender, // Added
 
             // AI Config
             aiProvider: state.aiProvider,
             aiApiKey: state.aiApiKey,
             geminiApiKey: state.geminiApiKey,
+            deepseekApiKey: state.deepseekApiKey,
+            openRouterApiKey: state.openRouterApiKey,
+            mistralApiKey: state.mistralApiKey,
 
             sportType: getVal('sportTypeInput'),
             raceDate: getVal('raceDateInput'),
@@ -903,6 +1284,7 @@ function importConfiguration() {
             if (document.getElementById('athleteIdInput')) document.getElementById('athleteIdInput').value = config.athleteId;
         }
         if (config.athleteName) state.athleteName = config.athleteName;
+        if (config.gender) state.gender = config.gender;
 
         // AI Config
         if (config.aiProvider) {
@@ -916,6 +1298,18 @@ function importConfiguration() {
         if (config.geminiApiKey) {
             state.geminiApiKey = config.geminiApiKey;
             if (document.getElementById('geminiApiKeyInput')) document.getElementById('geminiApiKeyInput').value = config.geminiApiKey;
+        }
+        if (config.deepseekApiKey) {
+            state.deepseekApiKey = config.deepseekApiKey;
+            if (document.getElementById('deepseekApiKeyInput')) document.getElementById('deepseekApiKeyInput').value = config.deepseekApiKey;
+        }
+        if (config.openRouterApiKey) {
+            state.openRouterApiKey = config.openRouterApiKey;
+            if (document.getElementById('openRouterApiKeyInput')) document.getElementById('openRouterApiKeyInput').value = config.openRouterApiKey;
+        }
+        if (config.mistralApiKey) {
+            state.mistralApiKey = config.mistralApiKey;
+            if (document.getElementById('mistralApiKeyInput')) document.getElementById('mistralApiKeyInput').value = config.mistralApiKey;
         }
         toggleProviderFields(); // Update UI
 
@@ -1001,6 +1395,7 @@ function importConfiguration() {
         localStorage.setItem('elite_goalTime', state.goalTime);
         localStorage.setItem('elite_raceType', state.raceType);
         localStorage.setItem('elite_sportType', state.sportType);
+        localStorage.setItem('elite_gender', state.gender); // Persist Gender
         localStorage.setItem('elite_apiKey', state.apiKey);
         localStorage.setItem('elite_athleteId', state.athleteId);
         localStorage.setItem('elite_aiProvider', state.aiProvider);
@@ -1040,6 +1435,47 @@ function importConfiguration() {
     }
 }
 
+// --- DEBUG PROMPT LOGIC (UPDATED) ---
+let lastDebugPrompt = "";
+
+function updateDebugPrompt(promptText) {
+    lastDebugPrompt = promptText;
+    const contentEl = document.getElementById('debugPromptContent');
+    if (contentEl) {
+        contentEl.textContent = promptText;
+    }
+    console.log("Debug Prompt updated (" + promptText.length + " chars)");
+}
+
+function toggleDebugPrompt(forceState) {
+    const modal = document.getElementById('debugPromptModal');
+    if (!modal) return;
+
+    const isHidden = modal.classList.contains('hidden');
+    const shouldShow = forceState !== undefined ? forceState : isHidden;
+
+    if (shouldShow) {
+        modal.classList.remove('hidden');
+    } else {
+        modal.classList.add('hidden');
+    }
+}
+
+function copyDebugPrompt() {
+    if (!lastDebugPrompt) return;
+    navigator.clipboard.writeText(lastDebugPrompt).then(() => {
+        showToast("Prompt copied to clipboard!");
+    }).catch(err => {
+        console.error('Failed to copy text: ', err);
+        showToast("Failed to copy");
+    });
+}
+
+// Expose functions to window
+window.updateDebugPrompt = updateDebugPrompt;
+window.toggleDebugPrompt = toggleDebugPrompt;
+window.copyDebugPrompt = copyDebugPrompt;
+
 // --- FEEDBACK ---
 function sendFeedback() {
     const message = document.getElementById('feedbackMessage').value.trim();
@@ -1055,3 +1491,7 @@ function sendFeedback() {
     window.location.href = mailtoLink;
     showToast("📧 Opening email client...");
 }
+
+// Explicitly expose populateSportDropdown
+window.populateSportDropdown = populateSportDropdown;
+console.log("UI.js: Loaded successfully");

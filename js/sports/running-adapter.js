@@ -1,0 +1,278 @@
+class RunningAdapter extends SportAdapter {
+    constructor() {
+        super("Running", "Running");
+    }
+
+    getConfigContainerId() {
+        return "running-config-container";
+    }
+
+    getPlanStartDateInputId() {
+        return "planStartDateInputRun";
+    }
+
+    getVolumeUnit() {
+        return "km";
+    }
+
+    getLongSessionLabel() {
+        return "Long Run";
+    }
+
+    generatePlan(inputs, globalSettings) {
+        // Extract inputs specific to Running
+        const startVol = inputs.startVolume || 30;
+        const startLR = inputs.startLongRun || 10;
+        const progressionRate = inputs.progressionRate || 0.10;
+        const taperDuration = inputs.taperDuration || 3;
+        const longRunProgression = inputs.longRunProgression || 2.0;
+        const raceType = inputs.raceType || "Marathon";
+
+        const raceDateStr = globalSettings.raceDate;
+        const planStartDate = globalSettings.planStartDate;
+
+        const options = {
+            progressionRate,
+            taperDuration,
+            longRunProgression,
+            raceType,
+            startWithRestWeek: globalSettings.startWithRestWeek,
+            customRestWeeks: globalSettings.customRestWeeks || [],
+            forceBuildWeeks: globalSettings.forceBuildWeeks || []
+        };
+
+        return this.calculateMarathonPlan(startVol, startLR, raceDateStr, planStartDate, options);
+    }
+
+    // --- Logic migrated from planning-running.js ---
+    calculateMarathonPlan(startVol, startLR, raceDateStr, planStartDate, options = {}) {
+        // Input Validation
+        startVol = parseFloat(startVol);
+        startLR = parseFloat(startLR);
+
+        // Robust fallbacks
+        if (isNaN(startVol) || startVol < 0) startVol = 30;
+        if (isNaN(startLR) || startLR < 0) startLR = 10;
+
+        // Helper to parse "YYYY-MM-DD" as local date (00:00:00) to avoid UTC shifts
+        const parseLocal = (dateStr) => {
+            if (!dateStr) return null;
+            const [y, m, d] = dateStr.split('-').map(Number);
+            return new Date(y, m - 1, d);
+        };
+
+        const raceDate = parseLocal(raceDateStr);
+        if (!raceDate || isNaN(raceDate.getTime())) {
+            console.error("Invalid race date");
+            return [];
+        }
+
+        // Use Plan Start Date if provided, otherwise default to Today
+        // For "Today", we just take new Date(), but zero out time.
+        let today;
+        if (planStartDate) {
+            today = parseLocal(planStartDate);
+        } else {
+            today = new Date();
+            today.setHours(0, 0, 0, 0);
+        }
+
+        if (!today || isNaN(today.getTime())) {
+            console.error("Invalid plan start date");
+            return [];
+        }
+
+        // Force Start Date to Monday of Current Week (if not already)
+        const day = today.getDay() || 7; // 1=Mon, 7=Sun
+        if (day !== 1) {
+            today.setDate(today.getDate() - day + 1);
+        }
+        // Ensure strictly midnight
+        today.setHours(0, 0, 0, 0);
+
+        const msPerWeek = 1000 * 60 * 60 * 24 * 7;
+        const weeksUntilRace = Math.ceil((raceDate - today) / msPerWeek);
+
+        if (weeksUntilRace < 1) return [];
+
+        // Options
+        const progressionRate = options.progressionRate || 0.10;
+        const startWithRestWeek = options.startWithRestWeek || false;
+        const customRestWeeks = options.customRestWeeks || [];
+        const forceBuildWeeks = options.forceBuildWeeks || [];
+        const raceType = options.raceType || "Marathon";
+
+        // --- RACE TYPE CONFIGURATION ---
+        const RACE_CONFIG = {
+            "Half Marathon": { maxLongRun: 22.0, taper: 2, lrProg: 1.5, raceDist: 21.1 },
+            "10k": { maxLongRun: 16.0, taper: 1, lrProg: 1.0, raceDist: 10.0 },
+            "Marathon": { maxLongRun: 36.0, taper: 3, lrProg: 2.0, raceDist: 42.2 }
+        };
+
+        const config = RACE_CONFIG[raceType] || RACE_CONFIG["Marathon"];
+
+        // Allow override from options, but default to race-type specific defaults
+        const taperDuration = options.taperDuration !== undefined ? options.taperDuration : config.taper;
+        const longRunProgression = options.longRunProgression !== undefined ? options.longRunProgression : config.lrProg;
+        const maxLongRunCap = config.maxLongRun;
+
+        // --- FORWARD GENERATION RE-IMPLEMENTATION ---
+        let plan = [];
+        let currentCapacity = parseFloat(startVol);
+        let currentLongRun = parseFloat(startLR);
+        let currentBlockNum = 1;
+
+        for (let i = 0; i < weeksUntilRace; i++) {
+            const weekNum = i + 1;
+            const weekStart = new Date(today);
+            weekStart.setDate(today.getDate() + (i * 7));
+
+            // Determine Phase/Block based on weeks remaining
+            const weeksRemaining = weeksUntilRace - i; // 1 means Race Week
+
+            let phaseName = "Base Phase";
+            let blockType = "Base";
+            let isRaceWeek = (weeksRemaining === 1);
+
+            if (isRaceWeek) {
+                phaseName = "Race Week";
+                blockType = "Race";
+            } else if (weeksRemaining <= taperDuration) {
+                phaseName = "Taper Phase";
+                blockType = "Taper";
+            } else if (weeksRemaining <= taperDuration + 3) {
+                phaseName = "Peak Phase";
+                blockType = "Peak";
+            } else if (weeksRemaining <= taperDuration + 3 + 4) {
+                phaseName = "Build Phase";
+                blockType = "Build";
+            } else {
+                // If it's the very last block before Build, call it Base/Build
+                if (weeksRemaining <= taperDuration + 3 + 4 + 4) {
+                    phaseName = "Base/Build Phase";
+                } else {
+                    phaseName = "Base Phase";
+                }
+                blockType = "Base";
+            }
+
+            // --- VOLUME & LONG RUN ---
+            let vol, longRun;
+            let isRecoveryWeek = false;
+
+            if (blockType === "Race") {
+                vol = currentCapacity * 0.4;
+                longRun = (raceType === "Marathon") ? 42.2 : (raceType === "Half Marathon") ? 21.1 : 10.0;
+            } else if (blockType === "Taper") {
+                // Taper Logic
+                const weeksOut = weeksRemaining - 1; // 1, 2, 3
+                // 1 week out (last taper week): 60%
+                // 3 weeks out (first taper week): 90%
+                let factor = 0.60 + (0.15 * (weeksOut - 1));
+                if (factor > 0.90) factor = 0.90;
+
+                vol = currentCapacity * factor;
+                longRun = currentLongRun * factor;
+            } else {
+                // Training Block
+
+                // Custom/Force Logic
+                if (customRestWeeks.includes(weekNum)) isRecoveryWeek = true;
+                else if (forceBuildWeeks.includes(weekNum)) isRecoveryWeek = false;
+                else {
+                    // Default Logic
+                    // Only apply default recovery if NOT in Peak phase
+                    if (blockType !== "Peak") {
+                        if (startWithRestWeek) {
+                            if ((weekNum - 1) % 4 === 0) isRecoveryWeek = true;
+                        } else {
+                            if (weekNum % 4 === 0) isRecoveryWeek = true;
+                        }
+                    }
+                }
+
+                if (isRecoveryWeek) {
+                    // Recovery Week: Drop volume
+                    // STRICT 60% of previous week (which is currentCapacity)
+                    const restWeekFactor = 0.60;
+                    vol = currentCapacity * restWeekFactor;
+                    longRun = currentLongRun * restWeekFactor;
+                } else {
+                    // Check if the previous week was a Recovery week
+                    const lastWeekIndex = plan.length - 1;
+                    const lastWeek = lastWeekIndex >= 0 ? plan[lastWeekIndex] : null;
+
+                    if (lastWeek && (lastWeek.weekName.includes("Recovery") || lastWeek.weekName === "Recovery Start")) {
+                        // RESTART LOGIC: 
+                        // Volume: Previous Peak * (1 - progressionRate)
+                        // Long Run: Previous Peak - longRunProgression
+
+                        // Note: currentCapacity holds the "Peak" from before the rest week.
+                        currentCapacity = currentCapacity * (1 - progressionRate);
+                        currentLongRun = currentLongRun - longRunProgression;
+                    } else {
+                        // NORMAL PROGRESSION
+                        // Only increase if it's not the very first week (unless we want to jump start)
+                        if (i > 0) {
+                            currentCapacity = currentCapacity * (1 + progressionRate);
+                            currentLongRun = currentLongRun + longRunProgression;
+                        }
+                    }
+
+                    // Peak Week Logic (Last week of Peak Phase)
+                    if (blockType === "Peak" && weeksRemaining === taperDuration + 1) {
+                        longRun = currentLongRun - (4 * longRunProgression);
+                        vol = currentCapacity; // Keep volume high
+                    } else {
+                        longRun = currentLongRun;
+                        vol = currentCapacity;
+                    }
+                }
+            }
+
+            // Caps
+            if (longRun > maxLongRunCap) longRun = maxLongRunCap;
+
+            // Rounding
+            vol = parseFloat(vol.toFixed(1));
+            longRun = parseFloat(longRun.toFixed(1));
+
+            // Calculate Block Number (Dynamic: New block after recovery)
+            const blockNum = currentBlockNum;
+
+            // Determine Focus
+            let focus = "Aerobic Endurance";
+            if (isRaceWeek) focus = "Race Day";
+            else if (blockType === "Taper") focus = "Recovery & Sharpening";
+            else if (blockType === "Peak") focus = "Race Specific";
+            else if (blockType === "Build") focus = "Threshold & Strength";
+            else if (isRecoveryWeek) focus = "Active Recovery";
+
+            plan.push({
+                week: weekNum,
+                blockNum: blockNum,
+                weekName: isRaceWeek ? "Race Week" : (blockType === "Taper" ? "Taper Week" : (vol < currentCapacity * 0.7 ? "Recovery Week" : "Build Week")),
+                phaseName: phaseName,
+                blockType: blockType,
+                startDateObj: weekStart,
+                startDate: weekStart.toISOString(),
+                date: weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                rawKm: vol,
+                mileage: vol.toFixed(1),
+                targetDistance: vol, // Explicit Running Volume (km)
+                targetTSS: 0,        // Explicit Cycling Load (TSS) - 0 for Run
+                longRun: longRun,
+                isRaceWeek: isRaceWeek,
+                focus: focus
+            });
+
+            if (isRecoveryWeek || (vol < currentCapacity * 0.7 && !isRaceWeek && blockType !== "Taper")) {
+                currentBlockNum++;
+            }
+        }
+
+        return plan;
+    }
+}
+
+window.RunningAdapter = RunningAdapter;
