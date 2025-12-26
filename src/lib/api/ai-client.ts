@@ -85,6 +85,48 @@ const PROVIDER_CONFIG: Record<AIProvider, {
 
 const rateLimits: Record<string, { count: number; start: number }> = {};
 
+/**
+ * Enforces client-side rate limiting for API providers.
+ *
+ * Implements a sliding window rate limiter that tracks request counts per provider
+ * and throws an error when the maximum requests per minute is exceeded.
+ *
+ * @param provider - The AI provider to check rate limits for
+ * @param maxPerMinute - Maximum number of requests allowed per minute
+ * @throws {Error} When rate limit is exceeded, includes time to wait in error message
+ *
+ * @remarks
+ * Rate Limiting Strategy:
+ * - Uses a 60-second sliding window that resets after each minute
+ * - Tracks requests per provider independently (e.g., Gemini limits don't affect OpenAI)
+ * - Window starts on first request and resets when 60 seconds have elapsed
+ * - Pre-emptively throws error before making request if limit would be exceeded
+ *
+ * Error Handling:
+ * - Calculates remaining wait time in seconds for user-friendly error messages
+ * - Error message format: "Rate limit exceeded. Please wait X seconds."
+ * - Caller should catch this error and display to user or implement retry logic
+ *
+ * @example
+ * try {
+ *   checkRateLimit('gemini', 5); // Max 5 requests per minute
+ *   // Proceed with API call...
+ * } catch (error) {
+ *   // Error: "Rate limit exceeded. Please wait 23 seconds."
+ *   console.error(error.message);
+ * }
+ *
+ * @internal
+ * State is maintained in the module-level `rateLimits` object with structure:
+ * ```
+ * {
+ *   [provider]: {
+ *     count: number,  // Number of requests in current window
+ *     start: number   // Timestamp (ms) when current window started
+ *   }
+ * }
+ * ```
+ */
 function checkRateLimit(provider: AIProvider, maxPerMinute: number): void {
     const now = Date.now();
 
@@ -178,7 +220,63 @@ class AIClient {
     }
 
     /**
-     * Make the actual HTTP request to the provider
+     * Constructs and executes HTTP requests to AI provider APIs.
+     *
+     * This method handles the complexity of different API formats across multiple
+     * providers, building provider-specific request bodies and headers.
+     *
+     * @param provider - The AI provider to send the request to
+     * @param apiKey - API key for authentication
+     * @param model - Model identifier (e.g., 'gpt-4o', 'gemini-2.5-flash')
+     * @param messages - Conversation messages in standard format
+     * @param temperature - Sampling temperature (0-1) for response randomness
+     * @returns Raw JSON response from the provider API
+     * @throws {Error} On HTTP errors or network failures, with parsed error message if available
+     *
+     * @remarks
+     * Provider-Specific Behavior:
+     *
+     * **Gemini (Google)**
+     * - Uses URL-based authentication: API key as query parameter
+     * - Unique request format: Flattens messages into single prompt text
+     * - URL pattern: /v1beta/models/{model}:generateContent?key={apiKey}
+     * - Body structure: { contents: [{ parts: [{ text: string }] }] }
+     *
+     * **OpenAI-Compatible Providers** (OpenAI, Mistral, DeepSeek, OpenRouter)
+     * - Uses Bearer token authentication in Authorization header
+     * - Standard OpenAI chat completions format
+     * - Body structure: { model, messages, temperature }
+     *
+     * **OpenRouter-Specific**
+     * - Requires additional headers: HTTP-Referer and X-Title
+     * - Used for attribution and analytics on their platform
+     *
+     * Request Configuration:
+     * - Timeout: 3 minutes (180,000ms) using AbortSignal
+     * - Content-Type: application/json
+     * - Method: POST
+     *
+     * Error Handling:
+     * - Attempts to parse error response JSON for detailed error messages
+     * - Falls back to generic "API Error {status}" if parsing fails
+     * - Preserves provider-specific error details when available
+     *
+     * @example
+     * // Internal usage by chat() method
+     * const response = await this.makeRequest(
+     *   'openai',
+     *   'sk-...',
+     *   'gpt-4o',
+     *   [{ role: 'user', content: 'Hello!' }],
+     *   0.7
+     * );
+     * // Response will be in OpenAI format:
+     * // { choices: [{ message: { content: '...' } }], ... }
+     *
+     * @internal
+     * This is a private method called exclusively by the chat() method.
+     * The response format varies by provider and is parsed by provider-specific
+     * parseResponse functions defined in PROVIDER_CONFIG.
      */
     private async makeRequest(
         provider: AIProvider,

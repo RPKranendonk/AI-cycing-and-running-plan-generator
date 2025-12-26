@@ -35,7 +35,56 @@ import {
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const DAY_NAMES_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-// Group weeks by block (4 weeks per block typically)
+/**
+ * Maps a week number to its corresponding training block and phase.
+ *
+ * Implements a structured 16-week training plan divided into 4-week blocks,
+ * each with a specific training focus following periodization principles.
+ *
+ * @param weekNum - Week number in the plan (1-indexed)
+ * @returns Object containing block number (1-4) and training phase
+ *
+ * @remarks
+ * **Training Block Structure (16 weeks total):**
+ *
+ * - **Block 1 (Weeks 1-4): Base Phase**
+ *   - Focus: Build aerobic foundation
+ *   - Priority: Easy mileage, structural adaptation
+ *   - Example: Long runs, easy runs, basic intervals
+ *
+ * - **Block 2 (Weeks 5-8): Build Phase**
+ *   - Focus: Increase intensity and volume
+ *   - Priority: Tempo work, longer intervals
+ *   - Example: Cruise intervals, marathon pace runs
+ *
+ * - **Block 3 (Weeks 9-12): Peak Phase**
+ *   - Focus: Race-specific intensity
+ *   - Priority: High-quality workouts, max volume
+ *   - Example: VO2max intervals, race pace practice
+ *
+ * - **Block 4 (Week 13+): Taper Phase**
+ *   - Focus: Recovery and sharpening
+ *   - Priority: Reduce volume, maintain intensity
+ *   - Example: Short intervals, race preparation
+ *
+ * **Periodization Logic:**
+ * - Each block builds on previous adaptations
+ * - Volume increases through base/build, peaks, then tapers
+ * - Intensity increases progressively across all blocks
+ * - Fourth week of each block is typically recovery week
+ *
+ * @example
+ * const week3 = getBlockForWeek(3);
+ * // Returns: { blockNum: 1, phase: 'base' }
+ *
+ * @example
+ * const week10 = getBlockForWeek(10);
+ * // Returns: { blockNum: 3, phase: 'peak' }
+ *
+ * @example
+ * const week15 = getBlockForWeek(15);
+ * // Returns: { blockNum: 4, phase: 'taper' }
+ */
 function getBlockForWeek(weekNum: number): { blockNum: number; phase: Phase } {
     if (weekNum <= 4) return { blockNum: 1, phase: 'base' };
     if (weekNum <= 8) return { blockNum: 2, phase: 'build' };
@@ -90,7 +139,91 @@ export default function Schedule() {
         });
     }, [blockWeeks]);
 
-    // Calculate week dates - Monday is the start of the week
+    /**
+     * Calculates the start and end dates for a given week in the training plan.
+     *
+     * Uses Monday-start convention and calculates dates relative to the current week,
+     * making Week 1 always the current week regardless of when the user starts.
+     *
+     * @param weekNum - Week number (1-indexed) from the training plan
+     * @returns Object containing formatted date strings and Date object for week start
+     *
+     * @remarks
+     * **Week Convention:**
+     * - Week starts on Monday, ends on Sunday
+     * - Week 1 = current week (starts on the most recent Monday)
+     * - Week 2 = next week (7 days after Week 1 Monday)
+     * - Week N = current Monday + (N-1) * 7 days
+     *
+     * **Algorithm Steps:**
+     *
+     * 1. **Find Current Monday**
+     *    - Get today's day of week (0=Sunday, 1=Monday, ..., 6=Saturday)
+     *    - Calculate offset to Monday:
+     *      - If Sunday (0): go back 6 days
+     *      - If Mon-Sat (1-6): go back (dayOfWeek - 1) days
+     *    - Result: Most recent Monday at or before today
+     *
+     * 2. **Calculate Week Start**
+     *    - Start from current Monday
+     *    - Add offset: (weekNum - 1) * 7 days
+     *    - Week 1: +0 days (current Monday)
+     *    - Week 2: +7 days (next Monday)
+     *    - Week 3: +14 days, etc.
+     *
+     * 3. **Calculate Week End**
+     *    - End = Start + 6 days (Sunday)
+     *    - Ensures 7-day week: Mon-Sun
+     *
+     * **Return Format:**
+     * ```typescript
+     * {
+     *   start: "Jan 15",      // Formatted start date (Monday)
+     *   end: "Jan 21",        // Formatted end date (Sunday)
+     *   startDate: Date       // Full Date object for programmatic use
+     * }
+     * ```
+     *
+     * **Date Formatting:**
+     * - Uses en-US locale
+     * - Format: "MMM D" (e.g., "Jan 15", "Dec 3")
+     * - Short month name + numeric day
+     *
+     * **Edge Cases:**
+     * - Sunday handled specially (goes back 6 days, not forward 1)
+     * - Month boundaries handled automatically by Date object
+     * - Year boundaries handled automatically (e.g., Dec 28 → Jan 3)
+     *
+     * @example
+     * // If today is Wednesday, Jan 17, 2024
+     * const week1 = getWeekDates(1);
+     * // Returns:
+     * // {
+     * //   start: "Jan 15",        // Monday of current week
+     * //   end: "Jan 21",          // Sunday of current week
+     * //   startDate: Date(2024-01-15)
+     * // }
+     *
+     * @example
+     * // Same today date, getting Week 3
+     * const week3 = getWeekDates(3);
+     * // Returns:
+     * // {
+     * //   start: "Jan 29",        // Monday two weeks from now
+     * //   end: "Feb 4",           // Sunday (crosses month boundary)
+     * //   startDate: Date(2024-01-29)
+     * // }
+     *
+     * @example
+     * // If today is Sunday, Jan 21, 2024
+     * const week1 = getWeekDates(1);
+     * // Returns:
+     * // {
+     * //   start: "Jan 15",        // Goes back to Monday (6 days ago)
+     * //   end: "Jan 21",          // Today (Sunday)
+     * //   startDate: Date(2024-01-15)
+     * // }
+     */
     const getWeekDates = (weekNum: number) => {
         const today = new Date();
         // Find the Monday of the current week
@@ -133,7 +266,101 @@ export default function Schedule() {
         return 'Run';
     };
 
-    // Push workouts to Intervals.icu (Full legacy logic)
+    /**
+     * Syncs a week's worth of planned workouts to Intervals.icu platform.
+     *
+     * This function handles the complete workflow of uploading weekly training schedules
+     * to Intervals.icu, including deleting old workouts and creating new ones with
+     * proper metadata and external IDs for tracking.
+     *
+     * @param weekNum - Week number (1-indexed) from the training plan
+     * @returns Promise that resolves when sync is complete
+     *
+     * @remarks
+     * **Sync Workflow:**
+     *
+     * 1. **Validation Phase**
+     *    - Verifies Intervals.icu API key and athlete ID are configured
+     *    - Shows error toast and exits if credentials missing
+     *    - Sets credentials on intervals API client
+     *
+     * 2. **Cleanup Phase**
+     *    - Calculates week start (Monday) and end dates
+     *    - Fetches existing workouts from Intervals.icu for the week
+     *    - Filters for app-created events (matching external_id pattern)
+     *    - Deletes old app events to prevent duplicates
+     *    - Preserves manually-created or other-app events
+     *
+     * 3. **Build Phase**
+     *    - Converts each scheduled workout into Intervals.icu event format
+     *    - Calculates proper date for each day (Monday = weekStart + 0)
+     *    - Normalizes sport types to API-compatible values
+     *    - Builds description with focus, distance, and duration
+     *    - Creates unique external_id per workout
+     *
+     * 4. **Upload Phase**
+     *    - Uploads all events using intervalsClient.uploadEvents()
+     *    - Uses upsert logic to handle potential conflicts
+     *    - Shows success toast with event count
+     *
+     * **Event Format:**
+     * ```typescript
+     * {
+     *   category: 'WORKOUT',
+     *   start_date_local: 'YYYY-MM-DDT06:00:00',  // 6 AM default
+     *   type: 'Run' | 'WeightTraining' | 'Ride',
+     *   name: 'Workout name',
+     *   description: 'Focus\n📏 Distance\n⏱️ Duration',
+     *   color: '#hex',
+     *   moving_time: seconds,
+     *   external_id: 'elite_coach_w{week}_{day}_{slot}'
+     * }
+     * ```
+     *
+     * **External ID Pattern:**
+     * - Format: `elite_coach_w{weekNum}_{dayName}_{slot}`
+     * - Example: `elite_coach_w3_Tuesday_morning`
+     * - Used for:
+     *   - Identifying app-created workouts vs manual entries
+     *   - Preventing duplicate uploads
+     *   - Safe deletion (only removes app events)
+     *
+     * **Date Calculation:**
+     * - Week starts on Monday (getWeekDates returns Monday as start)
+     * - Each day offset: Monday=0, Tuesday=1, ..., Sunday=6
+     * - Time: Defaults to 06:00:00 (6 AM) for all workouts
+     *
+     * **Sport Type Normalization:**
+     * - Running/Rest → 'Run'
+     * - Gym/Strength → 'WeightTraining'
+     * - Cycling → 'Ride'
+     * - See normalizeWorkoutType() function
+     *
+     * **Error Handling:**
+     * - Missing credentials: Shows error toast, exits early
+     * - Delete errors: Logged but doesn't block upload (warn + continue)
+     * - Upload errors: Shows error toast with message
+     * - All errors clear loading state via finally block
+     *
+     * **UI Feedback:**
+     * - Sets pushingWeek state (shows loading spinner)
+     * - Toast progression: "Syncing..." → "Week Pushed!" or error
+     * - Loading state cleared in finally block
+     *
+     * @example
+     * // User clicks "Push to Intervals.icu" button for Week 3
+     * await handlePushWeek(3);
+     * // Result: 5 workouts uploaded (Mon, Tue, Wed, Fri, Sat)
+     * //         Shows: "✅ Week Pushed! 5 workouts synced to Intervals.icu"
+     *
+     * @throws Does not throw - all errors caught and shown via toast notifications
+     *
+     * @sideEffects
+     * - Modifies Intervals.icu calendar (deletes old, creates new events)
+     * - Updates pushingWeek state during operation
+     * - Displays toast notifications
+     * - Makes multiple API calls to Intervals.icu
+     */
     const handlePushWeek = async (weekNum: number) => {
         if (!intervals.apiKey || !intervals.athleteId) {
             toast({

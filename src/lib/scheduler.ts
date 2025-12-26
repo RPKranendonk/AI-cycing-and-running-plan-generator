@@ -204,7 +204,46 @@ export function buildWeekSchedule(
 // ============================================================================
 
 /**
- * Find the best day for a workout based on available hours
+ * Finds the optimal day for scheduling a workout (typically the long run).
+ *
+ * Uses a priority-based algorithm to select the best day based on time availability
+ * and scheduling preferences.
+ *
+ * @param schedule - Current weekly schedule being built
+ * @param availability - User's available hours for each day of the week
+ * @param requiredMinutes - Minimum time needed for the workout
+ * @param preferred - Optional preferred day (0=Sun, 6=Sat), takes highest priority
+ * @returns Day index (0-6) of best available day, or -1 if no suitable day found
+ *
+ * @remarks
+ * Selection Priority (evaluated in order):
+ * 1. **Preferred Day** - If specified and has sufficient time
+ * 2. **Weekend Days** - Saturday (6) or Sunday (0) with enough hours
+ * 3. **Most Available Day** - Any day with maximum available hours
+ *
+ * Requirements:
+ * - Day must have enough available hours (requiredMinutes / 60)
+ * - Day must not already have a workout scheduled
+ *
+ * Algorithm Details:
+ * - Converts requiredMinutes to hours for comparison
+ * - Weekend days prioritized for long runs (common training pattern)
+ * - If no weekend slots available, finds day with most available time
+ * - Returns -1 if no day meets minimum time requirement
+ *
+ * @example
+ * const availability = {
+ *   0: { hours: 3 }, // Sunday - 3 hours
+ *   1: { hours: 1 }, // Monday - 1 hour
+ *   6: { hours: 2.5 } // Saturday - 2.5 hours
+ * };
+ * const longRunDay = findBestDay([], availability, 120, null);
+ * // Returns: 0 (Sunday) - weekend day with most hours (3 > 2.5)
+ *
+ * @example
+ * // With preferred day specified
+ * const preferredDay = findBestDay([], availability, 90, 6);
+ * // Returns: 6 (Saturday) - preferred day has enough time (2.5h >= 1.5h)
  */
 function findBestDay(
     schedule: DaySlot[],
@@ -243,7 +282,53 @@ function findBestDay(
 }
 
 /**
- * Find second-best day (for key workout)
+ * Finds the optimal day for the key workout (intervals/tempo), avoiding the long run day.
+ *
+ * Implements intelligent scheduling by preferring midweek days for quality workouts,
+ * which aligns with best practices in endurance training.
+ *
+ * @param schedule - Current weekly schedule being built
+ * @param availability - User's available hours for each day of the week
+ * @param requiredMinutes - Minimum time needed for the workout
+ * @param excludeDay - Day to exclude from selection (typically the long run day)
+ * @returns Day index (0-6) of best available day, or -1 if no suitable day found
+ *
+ * @remarks
+ * Selection Priority (evaluated in order):
+ * 1. **Midweek Days** - Tuesday (2), Wednesday (3), Thursday (4)
+ *    - Preferred for spacing hard efforts away from long run
+ *    - Allows recovery before/after weekend long runs
+ * 2. **Any Available Day** - Falls back to any day with sufficient time
+ *
+ * Requirements:
+ * - Day must not be the excluded day (long run day)
+ * - Day must not already have a workout scheduled
+ * - Day must have enough available hours
+ * - Selects day with most available hours within priority group
+ *
+ * Training Rationale:
+ * - Midweek quality sessions create optimal hard/easy pattern
+ * - Separates high-intensity efforts from long run for better recovery
+ * - Common pattern: Long Run (weekend) → Easy (Mon) → Key Workout (Tue-Thu)
+ *
+ * @example
+ * const availability = {
+ *   0: { hours: 3 },   // Sunday (excluded - long run)
+ *   2: { hours: 1.5 }, // Tuesday - 1.5 hours
+ *   3: { hours: 2 },   // Wednesday - 2 hours
+ *   5: { hours: 1.5 }  // Friday - 1.5 hours
+ * };
+ * const keyDay = findSecondBestDay([], availability, 45, 0);
+ * // Returns: 3 (Wednesday) - midweek day with most hours (2h > 1.5h)
+ *
+ * @example
+ * // When midweek unavailable, falls back to any day
+ * const limitedAvailability = {
+ *   0: { hours: 3 },   // Sunday (excluded)
+ *   5: { hours: 2 }    // Friday - only option
+ * };
+ * const keyDay = findSecondBestDay([], limitedAvailability, 45, 0);
+ * // Returns: 5 (Friday) - only available day with sufficient time
  */
 function findSecondBestDay(
     schedule: DaySlot[],
@@ -291,21 +376,152 @@ function getAvailableMinutes(availability: WeeklyAvailability, day: number): num
 }
 
 /**
- * Estimate duration in minutes from distance and pace
+ * Calculates workout duration in minutes from distance and running pace.
+ *
+ * Converts running distance and pace into estimated time needed, useful for
+ * checking if a workout fits within available time slots.
+ *
+ * @param distanceKm - Distance to cover in kilometers
+ * @param paceSecPerKm - Running pace in seconds per kilometer
+ * @returns Estimated duration in minutes (rounded up to nearest minute)
+ *
+ * @remarks
+ * Formula: duration = (distance × pace) / 60
+ * - Multiplies distance by pace to get total seconds
+ * - Divides by 60 to convert to minutes
+ * - Rounds up using Math.ceil() to ensure sufficient time is allocated
+ *
+ * Rounding Strategy:
+ * - Always rounds UP to be conservative with time estimates
+ * - Ensures scheduled workouts have adequate time
+ * - Better to have extra buffer than cut workouts short
+ *
+ * @example
+ * // 10km run at 5:00/km pace
+ * const duration = estimateDuration(10, 300);
+ * // Calculation: (10 * 300) / 60 = 50 minutes
+ * // Returns: 50
+ *
+ * @example
+ * // Long run: 20km at 6:15/km pace (375 sec/km)
+ * const longRunDuration = estimateDuration(20, 375);
+ * // Calculation: (20 * 375) / 60 = 125 minutes
+ * // Returns: 125
+ *
+ * @example
+ * // Fractional result rounds up
+ * const duration = estimateDuration(5.5, 290);
+ * // Calculation: (5.5 * 290) / 60 = 26.58...
+ * // Returns: 27 (rounded up)
  */
 function estimateDuration(distanceKm: number, paceSecPerKm: number): number {
     return Math.ceil((distanceKm * paceSecPerKm) / 60);
 }
 
 /**
- * Estimate distance in km from duration and pace
+ * Calculates maximum running distance achievable given time and pace constraints.
+ *
+ * Inverse of estimateDuration - determines how far you can run in available time,
+ * useful for filling time slots with appropriately-sized workouts.
+ *
+ * @param durationMin - Available time in minutes
+ * @param paceSecPerKm - Expected running pace in seconds per kilometer
+ * @returns Maximum distance in kilometers (may include decimals)
+ *
+ * @remarks
+ * Formula: distance = (duration × 60) / pace
+ * - Converts minutes to seconds by multiplying by 60
+ * - Divides by pace to get distance in kilometers
+ * - Returns precise decimal value (not rounded)
+ *
+ * Precision:
+ * - Returns decimal distances (e.g., 8.5 km)
+ * - Calling code typically rounds or validates minimum distances
+ * - Useful for calculating volume distribution across multiple runs
+ *
+ * @example
+ * // How far can I run in 45 minutes at 6:00/km pace?
+ * const distance = estimateDistance(45, 360);
+ * // Calculation: (45 * 60) / 360 = 7.5 km
+ * // Returns: 7.5
+ *
+ * @example
+ * // Easy run in 60 minutes at 6:15/km pace (375 sec/km)
+ * const easyDistance = estimateDistance(60, 375);
+ * // Calculation: (60 * 60) / 375 = 9.6 km
+ * // Returns: 9.6
+ *
+ * @example
+ * // Available time after warmup/cooldown
+ * const availableTime = 50 - 10; // 50min total - 10min buffer
+ * const maxDistance = estimateDistance(availableTime, 300);
+ * // Calculation: (40 * 60) / 300 = 8 km
+ * // Returns: 8
  */
 function estimateDistance(durationMin: number, paceSecPerKm: number): number {
     return (durationMin * 60) / paceSecPerKm;
 }
 
 /**
- * Select key workout type based on phase and week number
+ * Determines the type of quality workout for a given training phase and week.
+ *
+ * Implements periodization by cycling through different workout intensities based on
+ * training phase and week number, following structured training principles.
+ *
+ * @param phase - Current training phase (base, build, peak, taper, recovery, race)
+ * @param weekNumber - Absolute week number in the training plan (1-indexed)
+ * @returns Workout type: 'intervals' (high intensity), 'tempo' (moderate), or 'threshold'
+ *
+ * @remarks
+ * Workout Type Characteristics:
+ * - **Intervals**: High-end aerobic capacity work (VO2max efforts)
+ * - **Tempo**: Sustained moderate-hard efforts (mental toughness, stamina)
+ * - **Threshold**: Lactate threshold work (comfortably hard pace)
+ *
+ * Phase-Based Selection Logic:
+ *
+ * **Base Phase** (Foundation Building):
+ * - Uses 4-week microcycle pattern
+ * - Week 1 & 3: Intervals (builds aerobic power)
+ * - Week 2 & 4: Tempo (builds aerobic endurance)
+ * - Alternates high/moderate intensity for balanced development
+ *
+ * **Recovery Phase**:
+ * - Always tempo (lower intensity for active recovery)
+ * - Maintains fitness without excessive stress
+ *
+ * **All Other Phases** (Build, Peak, Taper, Race):
+ * - Defaults to intervals (race-specific intensity)
+ * - Prioritizes high-end fitness closer to competition
+ *
+ * Microcycle Calculation (Base Phase):
+ * - Cycle position = ((weekNumber - 1) % 4) + 1
+ * - Results in repeating 1-2-3-4 pattern throughout base phase
+ *
+ * @example
+ * // Base phase - week 1 of 4-week cycle
+ * const workout1 = selectKeyWorkoutType('base', 1);
+ * // Returns: 'intervals'
+ *
+ * @example
+ * // Base phase - week 2 of 4-week cycle
+ * const workout2 = selectKeyWorkoutType('base', 2);
+ * // Returns: 'tempo'
+ *
+ * @example
+ * // Base phase - week 5 (cycles back to week 1)
+ * const workout3 = selectKeyWorkoutType('base', 5);
+ * // Returns: 'intervals' (5-1 = 4, 4%4 = 0, 0+1 = 1 → intervals)
+ *
+ * @example
+ * // Build phase - always high intensity
+ * const workout4 = selectKeyWorkoutType('build', 10);
+ * // Returns: 'intervals'
+ *
+ * @example
+ * // Recovery phase - moderate intensity
+ * const workout5 = selectKeyWorkoutType('recovery', 4);
+ * // Returns: 'tempo'
  */
 function selectKeyWorkoutType(phase: Phase, weekNumber: number): 'intervals' | 'tempo' | 'threshold' {
     if (phase === 'base') {
