@@ -18,6 +18,7 @@ import {
     Zap,
     Calendar,
     TrendingUp,
+    RefreshCw,
 } from 'lucide-react'
 
 export default function Dashboard() {
@@ -62,11 +63,17 @@ export default function Dashboard() {
                     </h1>
                 </div>
                 <div className="flex items-center gap-3">
+                    <Link to="/onboarding">
+                        <Button variant="outline" className="rounded-full">
+                            <RefreshCw className="w-4 h-4 mr-2" />
+                            Quick Start
+                        </Button>
+                    </Link>
                     {!schedule && (
                         <Button
                             onClick={handleGeneratePlan}
-                            isLoading={isLoading}
                             className="rounded-full"
+                            disabled={isLoading}
                         >
                             <Zap className="w-4 h-4 mr-2" />
                             Generate Plan
