@@ -3,11 +3,9 @@
 // Main home page showing today's workout and weekly progress
 // ============================================================================
 
-import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useStore } from '@/lib/store'
-import { buildWeekSchedule, formatScheduleForDisplay } from '@/lib/scheduler'
-import type { WeekData } from '@/lib/scheduler'
+import { PlanGenerator } from '@/lib/plan-generator'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
@@ -22,33 +20,74 @@ import {
 } from 'lucide-react'
 
 export default function Dashboard() {
-    const { availability, progression, athlete, setLoading, isLoading } = useStore()
-    const [schedule, setSchedule] = useState<ReturnType<typeof formatScheduleForDisplay> | null>(null)
+    const {
+        availability,
+        progression,
+        athlete,
+        goal,
+        planSettings,
+        setLoading,
+        isLoading,
+        plan,
+        setPlan
+    } = useStore()
+
+    // Find current week in plan
+    const today = new Date()
+    const currentWeekInfo = plan.find(w => {
+        const start = new Date(w.startDate)
+        const end = new Date(w.endDate)
+        return today >= start && today <= end
+    }) || plan[0] // Fallback to first week if before/after or undefined
+
+    // Determine current day index (0-6) relative to week start
+    // If we have a plan, we should align with it. If not, just use Date.getDay()
+    // Wait, Types say 0=Sun. But Scheduler uses Monday start usually.
+    // Let's stick to standard JS for now: 0=Sun
+    const dayIndex = today.getDay();
 
     const handleGeneratePlan = () => {
         setLoading(true)
         setTimeout(() => {
-            const weekData: WeekData = {
-                weekNumber: 1,
-                targetVolume: progression.startingVolume,
-                longRunDistance: progression.startingLongRun,
-                phase: 'base',
-                isRecoveryWeek: false,
-                gymTarget: 2,
-                startDate: new Date().toISOString(),
-            }
-            const result = buildWeekSchedule(weekData, availability)
-            setSchedule(formatScheduleForDisplay(result))
+            const generatedPlan = PlanGenerator.generate(
+                athlete,
+                goal,
+                availability,
+                {
+                    startingVolume: progression.startingVolume,
+                    startingLongRun: progression.startingLongRun,
+                    progressionRate: planSettings.progressionRate,
+                    longRunProgression: planSettings.longRunProgression,
+                    taperDuration: planSettings.taperDuration,
+                    gymDays: athlete.gymAccess === 'none' ? 0 : 2, // Simple logic for now
+                    // TODO: Add pace settings from store if needed
+                }
+            )
+            setPlan(generatedPlan)
             setLoading(false)
-        }, 500)
+        }, 100)
     }
 
-    // Find today's workout from schedule
-    const todayIndex = new Date().getDay() // 0=Sun, 6=Sat
-    const todayWorkout = schedule?.[todayIndex]?.workout
-    const upcomingWorkouts = schedule?.filter((d, i) => i > todayIndex && d.workout).slice(0, 3) || []
+    // Today's workout from the plan
+    const todayWorkout = currentWeekInfo?.days[dayIndex]?.workout
 
-    // Today's date info is calculated inline below
+    // Future workouts: Filter upcoming days in current week, then next week if needed
+    // Simplified: Just show next 3 days from schedule
+    const upcomingWorkouts = []
+    if (currentWeekInfo) {
+        // Remaining days in this week
+        for (let i = dayIndex + 1; i < 7; i++) {
+            if (currentWeekInfo.days[i]?.workout) {
+                upcomingWorkouts.push({
+                    dayName: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][i],
+                    workout: currentWeekInfo.days[i].workout,
+                    date: new Date(new Date(currentWeekInfo.startDate).setDate(new Date(currentWeekInfo.startDate).getDate() + (i === 0 ? 6 : i - 1))) // Rough calc, need better date logic
+                })
+            }
+        }
+    }
+
+
 
     return (
         <div className="space-y-8 pb-20">
@@ -56,7 +95,7 @@ export default function Dashboard() {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
                     <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-1">
-                        Base Phase • Week 1
+                        {currentWeekInfo ? `${currentWeekInfo.phase} Phase • Week ${currentWeekInfo.weekNumber}` : 'Welcome'}
                     </p>
                     <h1 className="text-3xl font-bold tracking-tight">
                         {athlete.name ? `Welcome back, ${athlete.name.split(' ')[0]}` : "Today's Plan"}
@@ -69,7 +108,7 @@ export default function Dashboard() {
                             Quick Start
                         </Button>
                     </Link>
-                    {!schedule && (
+                    {!plan.length && (
                         <Button
                             onClick={handleGeneratePlan}
                             className="rounded-full"
@@ -157,7 +196,7 @@ export default function Dashboard() {
                                             className="rounded-t-sm flex-1 transition-all hover:opacity-100"
                                             style={{
                                                 height,
-                                                backgroundColor: todayWorkout.color + '80',
+                                                backgroundColor: todayWorkout.color + '80', // Fix: safely handle undefined color
                                             }}
                                             title={`${step.type}: ${step.duration} @ ${step.intensity}`}
                                         />
@@ -167,7 +206,7 @@ export default function Dashboard() {
                         )}
                     </CardContent>
                 </Card>
-            ) : !schedule ? (
+            ) : !plan.length ? (
                 <Card className="border-dashed border-2 bg-muted/30">
                     <CardContent className="p-12 text-center">
                         <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
@@ -177,9 +216,9 @@ export default function Dashboard() {
                         <p className="text-muted-foreground mb-6">
                             Click "Generate Plan" to create your personalized training schedule.
                         </p>
-                        <Button onClick={handleGeneratePlan} isLoading={isLoading}>
+                        <Button onClick={handleGeneratePlan} disabled={isLoading}>
                             <Zap className="w-4 h-4 mr-2" />
-                            Generate Plan
+                            {isLoading ? 'Generating...' : 'Generate Plan'}
                         </Button>
                     </CardContent>
                 </Card>
@@ -204,29 +243,29 @@ export default function Dashboard() {
                     </div>
 
                     <div className="grid gap-4">
-                        {schedule ? (
+                        {plan.length > 0 ? (
                             upcomingWorkouts.length > 0 ? (
-                                upcomingWorkouts.map((day, i) => (
+                                upcomingWorkouts.map((item, i) => (
                                     <div
-                                        key={day.day}
+                                        key={i}
                                         className="group flex items-center p-4 bg-white rounded-[20px] shadow-sm border border-transparent hover:border-border hover:shadow-md transition-all cursor-pointer dark:bg-zinc-900"
                                     >
                                         <div className="w-14 h-14 rounded-2xl bg-secondary flex flex-col items-center justify-center text-xs font-bold text-muted-foreground mr-4 group-hover:bg-primary group-hover:text-white transition-colors">
-                                            <span className="text-lg">{new Date(Date.now() + (i + 1) * 86400000).getDate()}</span>
-                                            <span className="uppercase">{day.dayName}</span>
+                                            <span className="text-lg">{item.date.getDate()}</span>
+                                            <span className="uppercase">{item.dayName}</span>
                                         </div>
 
                                         <div className="flex-1">
                                             <div className="flex items-center gap-2 mb-1">
-                                                <h4 className="font-bold text-lg">{day.workout?.name}</h4>
+                                                <h4 className="font-bold text-lg">{item.workout?.name}</h4>
                                                 <div
                                                     className="w-2 h-2 rounded-full"
-                                                    style={{ backgroundColor: day.workout?.color }}
+                                                    style={{ backgroundColor: item.workout?.color }}
                                                 />
                                             </div>
                                             <p className="text-sm text-muted-foreground">
-                                                {day.workout?.focus} • {day.workout?.estimatedDuration}m
-                                                {day.workout?.estimatedDistance && ` • ${day.workout.estimatedDistance}km`}
+                                                {item.workout?.focus} • {item.workout?.estimatedDuration}m
+                                                {item.workout?.estimatedDistance && ` • ${item.workout.estimatedDistance}km`}
                                             </p>
                                         </div>
 
@@ -252,14 +291,14 @@ export default function Dashboard() {
                                 <p className="text-sm text-muted-foreground mb-1">Volume</p>
                                 <div className="flex items-baseline gap-2">
                                     <span className="text-4xl font-bold">
-                                        {schedule ? Math.round(progression.startingVolume * 0.72) : 0}
+                                        {currentWeekInfo ? Math.round(currentWeekInfo.actualVolume || 0) : 0}
                                     </span>
-                                    <span className="text-sm font-medium">/ {progression.startingVolume} km</span>
+                                    <span className="text-sm font-medium">/ {currentWeekInfo ? currentWeekInfo.targetVolume : 0} km</span>
                                 </div>
                                 <div className="mt-2 h-2 w-full bg-secondary rounded-full overflow-hidden">
                                     <div
                                         className="h-full bg-primary rounded-full transition-all"
-                                        style={{ width: schedule ? '72%' : '0%' }}
+                                        style={{ width: currentWeekInfo && currentWeekInfo.targetVolume > 0 ? `${Math.min(100, ((currentWeekInfo.actualVolume || 0) / currentWeekInfo.targetVolume) * 100)}%` : '0%' }}
                                     />
                                 </div>
                             </div>

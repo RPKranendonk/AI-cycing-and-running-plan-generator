@@ -48,6 +48,13 @@ interface AppState {
         longRunProgression: number;
     };
 
+    // Generator Settings (Persisted)
+    planSettings: {
+        progressionRate: number;
+        longRunProgression: number;
+        taperDuration: number;
+        startWithRestWeek: boolean;
+    };
     // UI State
     viewMode: ViewMode;
     selectedWeek: number;
@@ -65,6 +72,7 @@ interface AppState {
     setPlan: (weeks: WeekSchedule[]) => void;
     updateWorkout: (weekNum: number, day: number, slot: 'am' | 'pm', workout: ScheduledWorkout | null) => void;
     setProgression: (prog: Partial<AppState['progression']>) => void;
+    setPlanSettings: (settings: Partial<AppState['planSettings']>) => void;
     setViewMode: (mode: ViewMode) => void;
     setSelectedWeek: (week: number) => void;
     setDragState: (state: DragState | null) => void;
@@ -115,6 +123,12 @@ const initialState = {
         progressionRate: 0.10,
         startingLongRun: 10,
         longRunProgression: 1.5,
+    },
+    planSettings: {
+        progressionRate: 0.10,
+        longRunProgression: 1.5,
+        taperDuration: 2,
+        startWithRestWeek: false,
     },
     viewMode: 'scroll' as ViewMode,
     selectedWeek: 1,
@@ -186,6 +200,10 @@ export const useStore = create<AppState>()(
                 progression: { ...state.progression, ...prog }
             })),
 
+            setPlanSettings: (settings) => set((state) => ({
+                planSettings: { ...state.planSettings, ...settings }
+            })),
+
             // UI Actions
             setViewMode: (mode) => set({ viewMode: mode }),
             setSelectedWeek: (week) => set({ selectedWeek: week }),
@@ -209,6 +227,7 @@ export const useStore = create<AppState>()(
                 longRunDay: state.longRunDay,
                 plan: state.plan,
                 progression: state.progression,
+                planSettings: state.planSettings,
             }),
         }
     )

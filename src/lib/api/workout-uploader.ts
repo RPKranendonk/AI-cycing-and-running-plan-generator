@@ -5,6 +5,11 @@
 
 import { intervalsClient, type IntervalsEvent } from './intervals-client';
 import type { ScheduledWorkout, WeekSchedule } from '@/types';
+import {
+    formatStepsForIntervals,
+    generateDescription,
+    type WorkoutStep
+} from './step-formatter';
 
 // ============================================================================
 // TYPES
@@ -40,26 +45,6 @@ export function normalizeWorkoutType(type: string): string | null {
 }
 
 /**
- * Formats workout steps for Intervals.icu description
- */
-export function formatStepsForIntervals(steps: ScheduledWorkout['steps']): string {
-    if (!steps || steps.length === 0) return '';
-
-    return steps.map((step, i) => {
-        const prefix = step.type === 'warmup' ? '🔥 Warmup' :
-            step.type === 'cooldown' ? '❄️ Cooldown' :
-                step.type === 'work' ? `🏃 Work ${i}` :
-                    step.type === 'rest' ? '😮‍💨 Rest' :
-                        step.type === 'recovery' ? '🔄 Recovery' : `📍 ${step.type}`;
-
-        const duration = step.duration ? `${step.duration}` : '';
-        const intensity = step.intensity ? ` @ ${step.intensity}` : '';
-
-        return `${prefix}: ${duration}${intensity}`;
-    }).join('\n');
-}
-
-/**
  * Builds an event object for Intervals.icu
  */
 export function buildEventObject(
@@ -79,7 +64,31 @@ export function buildEventObject(
     // Build description from steps or use workout description
     let description = '';
     if (workout.steps && workout.steps.length > 0) {
-        description = formatStepsForIntervals(workout.steps);
+        // Convert steps to proper Intervals.icu format
+        // Parse duration strings that might contain distance (e.g., "400m", "1km")
+        const formattedSteps: WorkoutStep[] = workout.steps.map(step => {
+            const stepFormatted: WorkoutStep = {
+                type: step.type as any,
+                duration: step.duration,
+                intensity: step.intensity
+            };
+
+            // Check if duration contains distance markers
+            const durationStr = step.duration.toString();
+            if (durationStr.match(/^\d+m$/) && !durationStr.includes('min')) {
+                // Distance in meters (e.g., "400m")
+                stepFormatted.distance = parseInt(durationStr);
+                delete stepFormatted.duration;
+            } else if (durationStr.match(/^\d+(\.\d+)?km$/)) {
+                // Distance in km (e.g., "1km", "1.5km")
+                stepFormatted.distance = parseFloat(durationStr) * 1000;
+                delete stepFormatted.duration;
+            }
+
+            return stepFormatted;
+        });
+
+        description = formatStepsForIntervals(formattedSteps);
     }
 
     // Add zone/intensity info
@@ -128,7 +137,7 @@ class WorkoutUploader {
     /**
      * Push a single week's workouts to Intervals.icu
      */
-    async pushWeek(week: WeekSchedule): Promise<WorkoutUploadResult> {
+    async pushWeek(week: WeekSchedule, includeTargets = true): Promise<WorkoutUploadResult> {
         const events: IntervalsEvent[] = [];
 
         week.days.forEach((day, dayIndex) => {
@@ -160,6 +169,12 @@ class WorkoutUploader {
             }
         });
 
+        // Add weekly targets
+        if (includeTargets && week.targetVolume) {
+            const targetEvent = this.buildWeeklyTargetEvent(week);
+            if (targetEvent) events.push(targetEvent);
+        }
+
         if (events.length === 0) {
             return { success: true, count: 0 };
         }
@@ -181,9 +196,49 @@ class WorkoutUploader {
     }
 
     /**
+     * Build weekly target event for Intervals.icu
+     */
+    private buildWeeklyTargetEvent(week: WeekSchedule): IntervalsEvent | null {
+        const startDate = new Date(week.startDate);
+        const dateStr = startDate.toISOString().split('T')[0];
+
+        // Calculate long run distance from workouts
+        let longRunDistance = 0;
+        week.days.forEach(day => {
+            if (day.workout?.name?.toLowerCase().includes('long')) {
+                longRunDistance = day.workout.estimatedDistance || 0;
+            }
+        });
+
+        // Determine sport type from first workout
+        let sportType = 'Run';
+        for (const day of week.days) {
+            if (day.workout) {
+                sportType = day.workout.sport === 'Cycling' ? 'Ride' : 'Run';
+                break;
+            }
+        }
+
+        const target: IntervalsEvent = {
+            category: 'TARGET',
+            start_date_local: `${dateStr}T00:00:00`,
+            type: sportType,
+            name: `Week ${week.weekNumber} Target`,
+            description: `Weekly Target:\n- Volume: ${week.targetVolume.toFixed(1)}km\n- Long ${sportType}: ${longRunDistance.toFixed(1)}km\n- Phase: ${week.phase}`,
+            distance: week.targetVolume * 1000, // Convert to meters
+        };
+
+        // Add external ID for tracking
+        (target as IntervalsEvent & { external_id: string }).external_id =
+            `endurance_ai_w${week.weekNumber}_target`;
+
+        return target;
+    }
+
+    /**
      * Push multiple weeks in bulk
      */
-    async pushWeeks(weeks: WeekSchedule[]): Promise<WorkoutUploadResult> {
+    async pushWeeks(weeks: WeekSchedule[], includeTargets = true): Promise<WorkoutUploadResult> {
         const allEvents: IntervalsEvent[] = [];
 
         for (const week of weeks) {
@@ -213,6 +268,12 @@ class WorkoutUploader {
                     if (event) allEvents.push(event);
                 }
             });
+
+            // Add weekly target
+            if (includeTargets && week.targetVolume) {
+                const targetEvent = this.buildWeeklyTargetEvent(week);
+                if (targetEvent) allEvents.push(targetEvent);
+            }
         }
 
         if (allEvents.length === 0) {

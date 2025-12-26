@@ -148,14 +148,14 @@ function initPromptLab() {
 
     // Pre-configure API keys for dev mode
     if (!state.apiKey) {
-        state.apiKey = '3k65dka97nooel671y9gv1m3b';
+        state.apiKey = '';
         state.athleteId = 'i11395';
     }
     if (!state.mistralApiKey) {
-        state.mistralApiKey = '12IO6Hhdos7HDsS93NBok2GIV0QJvEHl';
+        state.mistralApiKey = '';
     }
     if (!state.geminiApiKey) {
-        state.geminiApiKey = 'AIzaSyDVsmcps5-YE9dlRd3j6KAQx2bjMIUQo6Q';
+        state.geminiApiKey = '';
     }
 
     console.log('[PromptLab] Ready. Navigate to #prompt-lab to open.');

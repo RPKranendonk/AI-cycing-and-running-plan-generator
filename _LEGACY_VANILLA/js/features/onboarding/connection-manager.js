@@ -52,7 +52,7 @@ window.ConnectionManager = {
 
             // [Agent] Inject defaults
             if (!state.mistralApiKey) {
-                state.mistralApiKey = "ylZYW8lkIDRS2GlyzXawqyK4JzyukRkc";
+                state.mistralApiKey = "";
                 if (!state.aiProvider) state.aiProvider = "Mistral";
             }
 
