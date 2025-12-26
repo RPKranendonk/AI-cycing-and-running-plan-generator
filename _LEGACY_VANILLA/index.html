@@ -1,0 +1,1935 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <title>AI Coach - Smart Training</title>
+
+    <!-- PWA Meta Tags -->
+    <meta name="description" content="Intelligent training plans for runners and cyclists">
+    <meta name="theme-color" content="#10a37f">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="AI Coach">
+    <meta name="mobile-web-app-capable" content="yes">
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+
+    <!-- Icons -->
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="icons/icon-16.png">
+
+    <!-- Stylesheets -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;400;600;800&display=swap"
+        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/mobile.css">
+
+    <!-- Tailwind Config -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        slate: {
+                            850: '#172033',
+                            950: '#020617',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then((reg) => console.log('[SW] Registered:', reg.scope))
+                    .catch((err) => console.warn('[SW] Registration failed:', err));
+            });
+        }
+    </script>
+</head>
+
+<body class="h-screen flex overflow-hidden selection:bg-cyan-500/30 selection:text-cyan-200">
+
+    <!-- Global Overlays -->
+    <div id="crashOverlay" class="fixed inset-0 bg-red-950/90 z-[100] flex items-center justify-center p-8 hidden">
+        <div class="glass-panel p-8 rounded-2xl max-w-2xl w-full border-red-500/30">
+            <h2 class="text-2xl font-bold mb-4 text-red-400">System Error</h2>
+            <pre id="crashMsg"
+                class="bg-black/50 p-4 rounded-lg text-xs font-mono text-red-200 overflow-auto max-h-64 mb-6"></pre>
+            <button type="button" onclick="localStorage.clear(); location.reload()"
+                class="px-6 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-bold transition-colors">
+                Reset App
+            </button>
+        </div>
+    </div>
+
+    <div id="toast"
+        class="fixed top-6 right-16 transform translate-x-[120%] transition-transform duration-300 z-[90] glass-panel px-6 py-4 rounded-xl flex items-center gap-4 border-l-4 border-cyan-500 shadow-2xl">
+        <div class="w-8 h-8 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-400">
+            <i class="fa-solid fa-bell"></i>
+        </div>
+        <span id="toastMsg" class="text-sm font-semibold">Notification</span>
+    </div>
+
+    <!-- Theme Toggle Button -->
+    <button id="themeToggle" class="theme-toggle" title="Toggle Light/Dark Mode" aria-label="Toggle theme">
+        <i class="fa-solid fa-moon"></i>
+        <i class="fa-solid fa-sun"></i>
+    </button>
+
+    <!-- Theme Toggle Script (runs immediately to prevent flash) -->
+    <script>
+        (function () {
+            // Check for saved theme preference or default to dark
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+
+            // Toggle function
+            window.toggleTheme = function () {
+                const currentTheme = document.documentElement.getAttribute('data-theme');
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-theme', newTheme);
+                localStorage.setItem('theme', newTheme);
+                console.log(`[Theme] Switched to ${newTheme} mode`);
+            };
+
+            // Attach click handler after DOM ready
+            document.addEventListener('DOMContentLoaded', () => {
+                const toggleBtn = document.getElementById('themeToggle');
+                if (toggleBtn) {
+                    toggleBtn.addEventListener('click', toggleTheme);
+                }
+            });
+        })();
+    </script>
+
+    <div id="aiLoadingOverlay" class="hidden fixed inset-0 z-[95] flex items-center justify-center">
+        <!-- Blurred Backdrop -->
+        <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-xl"></div>
+
+        <!-- Content -->
+        <div class="relative z-10 flex flex-col items-center">
+            <!-- Pulsing Brain/Logo -->
+            <div class="relative w-28 h-28 mb-8">
+                <!-- Outer Glow -->
+                <div class="absolute inset-0 bg-cyan-500/30 rounded-full blur-xl animate-pulse"></div>
+                <!-- Spinning Border -->
+                <div class="absolute inset-0 border-2 border-white/10 rounded-full"></div>
+                <div class="absolute inset-0 border-t-2 border-cyan-400 rounded-full animate-spin duration-1000"></div>
+                <!-- Inner Icon -->
+                <div class="absolute inset-0 flex items-center justify-center">
+                    <div
+                        class="w-20 h-20 bg-slate-900 rounded-full flex items-center justify-center border border-white/10 shadow-2xl">
+                        <i
+                            class="fa-solid fa-bolt text-3xl text-transparent bg-clip-text bg-gradient-to-br from-cyan-400 to-blue-500 animate-pulse"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Text -->
+            <h3 id="loadingTitle" class="text-3xl font-bold text-white mb-3 tracking-tight font-display">Crafting
+                Plan...</h3>
+            <p id="loadingMessage" class="text-slate-400 text-sm mb-8 font-mono h-6 transition-opacity duration-500">
+                Initializing AI models...</p>
+
+            <!-- Cancel Button -->
+            <button onclick="hideAILoading()"
+                class="px-6 py-2 rounded-full border border-white/10 text-xs text-slate-500 hover:text-white hover:bg-white/5 transition-all uppercase tracking-widest font-bold backdrop-blur-md">
+                Cancel
+            </button>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmationModal"
+        class="fixed inset-0 bg-slate-950/80 z-[110] hidden flex items-center justify-center backdrop-blur-sm">
+        <div
+            class="glass-panel p-6 rounded-xl max-w-md w-full mx-4 border border-white/10 shadow-2xl transform transition-all scale-100">
+            <h3 id="confirmTitle" class="text-xl font-bold text-white mb-2">Confirm Action</h3>
+            <p id="confirmMessage" class="text-slate-400 text-sm mb-6">Are you sure you want to proceed?</p>
+            <div class="flex justify-end gap-3">
+                <button id="confirmCancelBtn"
+                    class="px-4 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-sm font-bold">
+                    Cancel
+                </button>
+                <button id="confirmOkBtn"
+                    class="px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-white shadow-lg shadow-cyan-500/20 transition-all text-sm font-bold">
+                    Confirm
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upgrade Modal -->
+    <div id="upgradeModal"
+        class="fixed inset-0 bg-slate-950/90 z-[130] hidden flex items-center justify-center backdrop-blur-md">
+        <div
+            class="glass-panel p-8 rounded-2xl max-w-md w-full mx-4 border border-cyan-500/30 shadow-2xl relative overflow-hidden text-center">
+
+            <!-- Bg Glow -->
+            <div class="absolute inset-0 bg-gradient-to-tr from-cyan-500/10 to-purple-500/10 animate-pulse"></div>
+
+            <div class="relative z-10">
+                <div
+                    class="w-16 h-16 rounded-full bg-gradient-to-br from-cyan-400 to-purple-500 mx-auto mb-6 flex items-center justify-center shadow-lg shadow-purple-500/20">
+                    <i class="fa-solid fa-heart text-2xl text-white"></i>
+                </div>
+
+                <h3 class="text-2xl font-bold text-white mb-2">Support & Maintenance</h3>
+
+                <p class="text-slate-400 text-sm mb-6 leading-relaxed">
+                    This is just to pay for my AI pro subscription and to maintain the tool.
+                    <br><b class="text-white">I don't intend to make a profit.</b>
+                </p>
+
+                <!-- Donation Options -->
+                <div class="grid grid-cols-2 gap-3 mb-6">
+                    <button onclick="window.PaymentService.upgrade('one_time')"
+                        class="p-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-white/10 hover:border-cyan-500/50 transition-all group">
+                        <div class="text-lg font-bold text-white group-hover:text-cyan-400">$5</div>
+                        <div class="text-[10px] text-slate-500 uppercase tracking-wider">One-Time</div>
+                    </button>
+                    <button onclick="window.PaymentService.upgrade('subscription')"
+                        class="p-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-white/10 hover:border-purple-500/50 transition-all group">
+                        <div class="text-lg font-bold text-white group-hover:text-purple-400">$5/mo</div>
+                        <div class="text-[10px] text-slate-500 uppercase tracking-wider">Subscribe</div>
+                    </button>
+                </div>
+
+                <!-- Feedback Section -->
+                <div class="mb-6 pt-6 border-t border-white/5">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Your Feedback is
+                        Valuable</label>
+                    <textarea id="feedbackText" rows="2" class="glass-input w-full p-3 rounded-lg text-xs mb-2"
+                        placeholder="What can be improved?"></textarea>
+                    <button onclick="window.PaymentService.sendFeedback()"
+                        class="w-full py-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 text-xs font-bold transition-all">
+                        Send Feedback
+                    </button>
+                </div>
+
+                <button onclick="document.getElementById('upgradeModal').classList.add('hidden')"
+                    class="text-xs text-slate-500 hover:text-white transition-colors uppercase font-bold tracking-wider">
+                    Maybe Later
+                </button>
+            </div>
+        </div>
+    </div>
+    <div id="debugPromptModal"
+        class="fixed inset-0 bg-slate-950/90 z-[120] hidden flex items-center justify-center backdrop-blur-md">
+        <div
+            class="glass-panel w-full max-w-4xl h-[80vh] flex flex-col m-4 rounded-xl border border-yellow-500/30 shadow-2xl">
+            <div class="flex items-center justify-between p-4 border-b border-white/10 bg-black/20">
+                <h3 class="font-bold text-yellow-500 flex items-center gap-2">
+                    <i class="fa-solid fa-bug"></i> AI Prompt Debugger
+                </h3>
+                <div class="flex items-center gap-2">
+                    <button onclick="copyDebugPrompt()"
+                        class="px-3 py-1 bg-white/5 hover:bg-white/10 rounded text-xs uppercase font-bold text-slate-300">
+                        <i class="fa-regular fa-copy mr-1"></i> Copy
+                    </button>
+                    <button onclick="toggleDebugPrompt()"
+                        class="w-8 h-8 flex items-center justify-center hover:bg-white/10 rounded-lg text-slate-400 hover:text-white">
+                        <i class="fa-solid fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="flex-1 overflow-auto p-4 bg-slate-950/50 font-mono text-xs text-green-400 leading-relaxed selection:bg-yellow-900 selection:text-white"
+                id="debugPromptContent">
+                No prompt generated yet...
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Debug Button -->
+    <button onclick="toggleDebugPrompt()"
+        class="fixed bottom-4 right-4 z-[200] w-10 h-10 bg-yellow-500/20 hover:bg-yellow-500/40 text-yellow-500 rounded-full flex items-center justify-center border border-yellow-500/50 shadow-lg backdrop-blur hover:scale-110 transition-all group"
+        title="View AI Prompt">
+        <i class="fa-solid fa-bug text-sm"></i>
+        <span
+            class="absolute right-full mr-2 px-2 py-1 bg-black/80 rounded text-xs text-yellow-500 opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none transition-opacity">
+            View Prompt
+        </span>
+    </button>
+
+    <!-- Sidebar (Fixed Left) -->
+    <aside
+        class="w-20 sm:w-64 md:w-64 lg:w-72 flex-shrink-0 border-r border-white/5 bg-slate-900/40 flex flex-col justify-between z-20 backdrop-blur-md transition-all duration-300">
+        <!-- Top: Logo & Nav -->
+        <div>
+            <div class="h-20 flex items-center justify-center lg:justify-start lg:px-6 border-b border-white/5">
+                <div
+                    class="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                    <i class="fa-solid fa-bolt text-white text-lg"></i>
+                </div>
+                <div class="hidden sm:block ml-3">
+                    <h1 class="font-bold text-lg tracking-tight text-white leading-none">AI COACH</h1>
+                    <span class="text-[10px] text-cyan-400 font-mono uppercase tracking-widest">PRO V64</span>
+                </div>
+            </div>
+
+            <nav class="p-4 space-y-2">
+                <button onclick="location.reload()"
+                    class="w-full flex items-center gap-4 p-3 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 transition-all group">
+                    <i class="fa-solid fa-house text-lg w-6 text-center"></i>
+                    <span class="hidden sm:block font-semibold text-sm">Dashboard</span>
+                </button>
+                <button onclick="openQuickSetup()"
+                    class="w-full flex items-center gap-4 p-3 rounded-xl bg-gradient-to-r from-purple-500/20 to-cyan-500/20 text-slate-100 hover:from-purple-500/30 hover:to-cyan-500/30 transition-all group border border-purple-500/20">
+                    <i class="fa-solid fa-wand-magic-sparkles text-lg w-6 text-center text-purple-400"></i>
+                    <span class="hidden sm:block font-semibold text-sm">Quick Setup ✨</span>
+                </button>
+                <button onclick="openSetup()"
+                    class="w-full flex items-center gap-4 p-3 rounded-xl text-slate-400 hover:bg-white/5 hover:text-white transition-all group">
+                    <i
+                        class="fa-solid fa-sliders text-lg w-6 text-center group-hover:text-cyan-400 transition-colors"></i>
+                    <span class="hidden sm:block font-semibold text-sm">Advanced Setup</span>
+                </button>
+                <button onclick="fetchData(true)"
+                    class="w-full flex items-center gap-4 p-3 rounded-xl text-slate-400 hover:bg-white/5 hover:text-white transition-all group">
+                    <i
+                        class="fa-solid fa-rotate text-lg w-6 text-center group-hover:text-emerald-400 transition-colors"></i>
+                    <span class="hidden sm:block font-semibold text-sm">Sync Data</span>
+                </button>
+                <button onclick="openStatsView()"
+                    class="w-full flex items-center gap-4 p-3 rounded-xl text-slate-400 hover:bg-white/5 hover:text-white transition-all group">
+                    <i
+                        class="fa-solid fa-chart-line text-lg w-6 text-center group-hover:text-amber-400 transition-colors"></i>
+                    <span class="hidden sm:block font-semibold text-sm">Stats & Readiness</span>
+                </button>
+                <button onclick="togglePromptLab()"
+                    class="w-full flex items-center gap-4 p-3 rounded-xl text-slate-400 hover:bg-white/5 hover:text-white transition-all group">
+                    <i
+                        class="fa-solid fa-flask text-lg w-6 text-center group-hover:text-amber-400 transition-colors"></i>
+                    <span class="hidden sm:block font-semibold text-sm">Prompt Lab</span>
+                </button>
+            </nav>
+        </div>
+
+        <!-- Bottom: Stats -->
+        <div class="p-4 border-t border-white/5 hidden md:block">
+            <div class="glass-card p-4 rounded-xl mb-4">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-[10px] uppercase font-bold text-slate-500">Readiness</span>
+                    <span id="readinessBadge" class="w-2 h-2 rounded-full bg-slate-600"></span>
+                </div>
+                <div class="flex items-end gap-2">
+                    <span id="readinessScore" class="text-3xl font-bold text-white">--</span>
+                    <span class="text-xs text-slate-500 mb-1">/ 100</span>
+                </div>
+            </div>
+
+            <div class="glass-card p-4 rounded-xl">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-[10px] uppercase font-bold text-slate-500">Volume (4wk)</span>
+                </div>
+                <div class="flex items-end gap-2">
+                    <span id="vol-4wk-avg" class="text-2xl font-bold text-white">--</span>
+                    <span class="text-xs text-slate-500 mb-1">km/wk</span>
+                </div>
+            </div>
+
+            <!-- Wellness Stats (New) -->
+            <div class="glass-card p-4 rounded-xl mt-4">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1">
+                        <i class="fa-solid fa-heart-pulse"></i> Wellness (4w Avg)
+                    </span>
+                </div>
+                <div class="grid grid-cols-2 gap-3 text-xs">
+                    <div class="bg-black/20 p-2 rounded">
+                        <span class="text-slate-500 block text-[10px]">RHR</span>
+                        <span id="bio-rhr" class="font-bold text-white text-sm">--</span>
+                        <span class="text-[10px] text-slate-600">bpm</span>
+                    </div>
+                    <div class="bg-black/20 p-2 rounded">
+                        <span class="text-slate-500 block text-[10px]">HRV</span>
+                        <span id="bio-hrv" class="font-bold text-white text-sm">--</span>
+                        <span class="text-[10px] text-slate-600">ms</span>
+                    </div>
+                    <div class="bg-black/20 p-2 rounded">
+                        <span class="text-slate-500 block text-[10px]">Sleep</span>
+                        <span id="bio-sleep" class="font-bold text-white text-sm">--</span>
+                        <span class="text-[10px] text-slate-600">hrs</span>
+                    </div>
+                    <div class="bg-black/20 p-2 rounded">
+                        <span class="text-slate-500 block text-[10px]">Soreness</span>
+                        <span id="bio-soreness" class="font-bold text-white text-sm">--</span>
+                        <span class="text-[10px] text-slate-600">/4</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main
+        class="flex-1 flex flex-col relative overflow-hidden bg-[url('https://grainy-gradients.vercel.app/noise.svg')]">
+
+        <!-- Header -->
+        <header class="h-20 flex items-center justify-between px-8 z-10">
+            <div>
+                <h2 class="text-2xl font-bold text-white" id="currentPhaseTitle">Training Plan</h2>
+                <p class="text-xs text-slate-400 font-mono" id="planSubtitle">No active plan</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <button onclick="pushWeeklyTargetsToIntervals()"
+                    class="px-4 py-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all text-xs font-bold flex items-center gap-2">
+                    <i class="fa-solid fa-bullseye"></i> Push Targets
+                </button>
+                <div class="h-8 w-[1px] bg-white/10 mx-2"></div>
+                <div class="flex items-center gap-2">
+                    <div
+                        class="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-pink-500 flex items-center justify-center text-xs font-bold text-white">
+                        ME
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Scrollable Content -->
+        <div class="flex-1 overflow-y-auto px-8 pb-20 scroll-smooth" id="mainScrollArea">
+
+            <!-- Empty State -->
+            <div id="emptyStateContainer" class="hidden h-full flex flex-col items-center justify-center -mt-20">
+                <div class="w-24 h-24 rounded-full bg-cyan-500/10 flex items-center justify-center mb-6 animate-pulse">
+                    <i class="fa-solid fa-person-running text-4xl text-cyan-400"></i>
+                </div>
+                <h3 class="text-3xl font-bold text-white mb-2">Ready to Train?</h3>
+                <p class="text-slate-400 max-w-md text-center mb-8">Configure your profile and let AI craft your perfect
+                    season.</p>
+                <button onclick="openSetup()"
+                    class="px-8 py-4 rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold shadow-lg shadow-cyan-500/25 hover:scale-105 transition-transform">
+                    Get Started
+                </button>
+            </div>
+
+            <!-- MOBILE TODAY VIEW (shown on mobile only) -->
+            <div id="mobileTodayView">
+                <!-- Rendered by mobile-today.js -->
+            </div>
+
+            <!-- Plan Container (desktop) -->
+            <div id="planContainer" class="max-w-5xl mx-auto space-y-6 pt-4 pb-20">
+                <!-- Injected via JS -->
+            </div>
+
+            <!-- PROMPT LAB PANEL (hidden by default, shown via #prompt-lab) -->
+            <div id="promptLabPanel" class="hidden flex-col max-w-6xl mx-auto pt-4 pb-20 w-full">
+                <!-- Header -->
+                <div class="flex items-center justify-between mb-6">
+                    <div class="flex items-center gap-3">
+                        <div
+                            class="w-10 h-10 bg-gradient-to-br from-yellow-500 to-orange-600 rounded-xl flex items-center justify-center">
+                            <i class="fa-solid fa-flask text-white"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">Prompt Lab</h2>
+                            <p class="text-xs text-slate-400">Rapid AI prompt iteration & testing</p>
+                        </div>
+                    </div>
+                    <a href="#"
+                        class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white text-xs font-bold transition-colors">
+                        <i class="fa-solid fa-arrow-left mr-2"></i>Exit Lab
+                    </a>
+                </div>
+
+                <!-- Controls Row -->
+                <div class="flex flex-wrap items-center gap-4 mb-6 p-4 glass-card rounded-xl">
+                    <!-- Scenario Selector -->
+                    <div class="flex-1 min-w-[200px]">
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Scenario</label>
+                        <select id="labScenarioSelect" onchange="loadScenario(this.value)"
+                            class="glass-input w-full p-2 rounded-lg text-sm">
+                            <option value="">Select a test scenario...</option>
+                            <option value="beginner-runner">🏃 Beginner Runner (10K)</option>
+                            <option value="sub3-marathoner">🏅 Sub-3 Marathoner</option>
+                            <option value="beginner-cyclist">🚴 Beginner Cyclist (Century)</option>
+                            <option value="tt-champion">🏆 TT Champion (Elite)</option>
+                        </select>
+                    </div>
+
+                    <!-- AI Provider -->
+                    <div class="w-40">
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">AI Provider</label>
+                        <select id="labAiProvider" class="glass-input w-full p-2 rounded-lg text-sm">
+                            <option value="mistral">Mistral</option>
+                            <option value="gemini">Gemini Flash</option>
+                        </select>
+                    </div>
+
+                    <!-- Status -->
+                    <div class="w-48">
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Status</label>
+                        <div id="labStatus" class="text-xs text-slate-400">Ready</div>
+                    </div>
+                </div>
+
+                <!-- Scenario Info Card -->
+                <div id="labScenarioDesc" class="mb-6 p-4 glass-card rounded-xl border border-white/5">
+                    <div class="text-sm text-slate-400">Select a scenario to begin testing</div>
+                </div>
+
+                <!-- Two Column Layout -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <!-- Left: Prompt Preview -->
+                    <div class="glass-card rounded-xl overflow-hidden flex flex-col">
+                        <div class="flex items-center justify-between p-3 border-b border-white/10 bg-slate-800/50">
+                            <h4
+                                class="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-2">
+                                <i class="fa-solid fa-code"></i> Prompt Preview
+                            </h4>
+                            <div class="flex items-center gap-2">
+                                <span id="labPromptCharCount" class="text-[10px] text-slate-500">0 chars</span>
+                                <button onclick="copyLabPrompt()"
+                                    class="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-[10px] text-white transition-colors">
+                                    <i class="fa-regular fa-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <textarea id="labPromptPreview" readonly
+                            class="flex-1 min-h-[300px] p-3 bg-slate-950/50 text-[10px] font-mono text-emerald-400 resize-none focus:outline-none"
+                            spellcheck="false">Click "Generate Prompt" to preview...</textarea>
+                        <div class="p-3 border-t border-white/10 flex gap-2">
+                            <button onclick="generateLabPrompt()"
+                                class="flex-1 px-4 py-2 rounded-lg bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/30 text-xs font-bold transition-colors">
+                                <i class="fa-solid fa-eye mr-2"></i>Generate Prompt
+                            </button>
+                            <button onclick="executeLabAI()"
+                                class="flex-1 px-4 py-2 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 text-xs font-bold transition-colors">
+                                <i class="fa-solid fa-play mr-2"></i>Execute AI
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Right: AI Response -->
+                    <div class="glass-card rounded-xl overflow-hidden flex flex-col">
+                        <div class="flex items-center justify-between p-3 border-b border-white/10 bg-slate-800/50">
+                            <h4
+                                class="text-xs font-bold text-purple-400 uppercase tracking-wider flex items-center gap-2">
+                                <i class="fa-solid fa-robot"></i> AI Response
+                            </h4>
+                            <button onclick="copyLabResponse()"
+                                class="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-[10px] text-white transition-colors">
+                                <i class="fa-regular fa-copy"></i> Copy
+                            </button>
+                        </div>
+                        <textarea id="labAiResponse" readonly
+                            class="flex-1 min-h-[300px] p-3 bg-slate-950/50 text-[10px] font-mono text-orange-300 resize-none focus:outline-none"
+                            spellcheck="false">Response will appear here...</textarea>
+                        <div class="p-3 border-t border-white/10 flex gap-2">
+                            <button onclick="pushLabWorkouts()"
+                                class="flex-1 px-4 py-2 rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 text-xs font-bold transition-colors">
+                                <i class="fa-solid fa-upload mr-2"></i>Push to Intervals.icu
+                            </button>
+                            <button onclick="clearLabWorkouts()"
+                                class="flex-1 px-4 py-2 rounded-lg bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 text-xs font-bold transition-colors">
+                                <i class="fa-solid fa-trash mr-2"></i>Clear Workouts
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="flex items-center gap-3 p-4 glass-card rounded-xl border border-yellow-500/20 mb-6">
+                    <i class="fa-solid fa-bolt text-yellow-500"></i>
+                    <span class="text-xs text-slate-400">Quick Actions:</span>
+                    <button onclick="loadScenario('beginner-runner'); generateLabPrompt(); executeLabAI();"
+                        class="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs text-white transition-colors">
+                        One-Click: Beginner Runner
+                    </button>
+                    <button onclick="loadScenario('sub3-marathoner'); generateLabPrompt(); executeLabAI();"
+                        class="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs text-white transition-colors">
+                        One-Click: Sub-3 Marathon
+                    </button>
+                </div>
+
+                <!-- WORKOUT BUILDER -->
+                <div class="glass-card rounded-xl p-4 border border-cyan-500/30">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-dumbbell text-cyan-400"></i> Workout Builder
+                        </h3>
+                        <span class="text-xs text-slate-400">Manual Push to Intervals.icu</span>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <!-- Activity Type -->
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Activity
+                                Type</label>
+                            <select id="builderType"
+                                class="glass-input w-full p-2 rounded-lg text-sm text-white bg-slate-800">
+                                <option value="Run">🏃 Running</option>
+                                <option value="Ride">🚴 Cycling</option>
+                                <option value="WeightTraining">💪 Strength / Weights</option>
+                                <option value="Yoga">🧘 Yoga / Mobility</option>
+                                <option value="Swim">🏊 Swim</option>
+                                <option value="Rowing">🚣 Rowing</option>
+                                <option value="RockClimbing">🧗 Rock Climbing</option>
+                            </select>
+                        </div>
+
+                        <!-- Color -->
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Color /
+                                Category</label>
+                            <select id="builderColor"
+                                class="glass-input w-full p-2 rounded-lg text-sm text-white bg-slate-800">
+                                <option value="">Default (Auto)</option>
+                                <option value="Green">Green (Endurance)</option>
+                                <option value="Red">Red (High Intensity)</option>
+                                <option value="Blue">Blue (Recovery)</option>
+                                <option value="Yellow">Yellow (Tempo)</option>
+                                <option value="Purple">Purple (Strength)</option>
+                            </select>
+                        </div>
+
+                        <!-- Target Load/Time -->
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Duration
+                                (min)</label>
+                            <input type="number" id="builderDuration" value="60"
+                                class="glass-input w-full p-2 rounded-lg text-sm" placeholder="e.g. 60">
+                        </div>
+                    </div>
+
+                    <!-- Description / Steps -->
+                    <div class="mb-4">
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Description /
+                            Steps</label>
+                        <textarea id="builderDescription" rows="3"
+                            class="glass-input w-full p-2 rounded-lg text-sm font-mono"
+                            placeholder="Warmup 10m&#10;Main Set: 3x10 reps&#10;Cooldown 5m"></textarea>
+                    </div>
+
+                    <!-- Notes -->
+                    <div class="mb-4">
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Trainer Notes
+                            (Private)</label>
+                        <textarea id="builderNotes" rows="2" class="glass-input w-full p-2 rounded-lg text-sm"
+                            placeholder="Focus on form..."></textarea>
+                    </div>
+
+                    <div class="flex justify-end gap-3">
+                        <button onclick="pushBuilderWorkout()"
+                            class="px-6 py-2 rounded-lg bg-emerald-500 text-white font-bold hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-500/20">
+                            <i class="fa-solid fa-upload mr-2"></i> Push to Intervals.icu
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- SETUP MODAL (Full Screen Overlay) -->
+    <div id="setupModal" class="fixed inset-0 bg-slate-950/95 z-50 hidden flex-col backdrop-blur-xl">
+
+        <!-- Modal Header -->
+        <div class="h-20 border-b border-white/5 flex items-center justify-between px-8 bg-slate-900/50">
+            <h2 class="text-xl font-bold text-white flex items-center gap-3">
+                <i class="fa-solid fa-sliders text-cyan-400"></i> Configuration
+            </h2>
+            <div class="flex items-center ml-auto gap-4">
+                <!-- Pro Mode Toggle -->
+                <div class="flex items-center gap-2" title="Toggle Advanced Settings">
+                    <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Pro</span>
+                    <button onclick="toggleProMode()" id="proModeToggle"
+                        class="w-8 h-4 rounded-full bg-slate-700 relative transition-colors focus:outline-none">
+                        <div id="proModeKnob"
+                            class="w-2 h-2 bg-white/50 rounded-full absolute top-1 left-1 transition-transform"></div>
+                    </button>
+                </div>
+                <button onclick="closeSetup()"
+                    class="w-10 h-10 rounded-full hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-colors">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Modal Content (Vertical View with Top Tabs) -->
+        <div class="flex-1 flex flex-col overflow-hidden">
+
+            <!-- Top: Tab Navigation -->
+            <div class="flex items-center px-8 border-b border-white/5 bg-slate-900/40 overflow-x-auto no-scrollbar">
+                <div class="flex gap-1 min-w-max">
+                    <button onclick="switchSettingsTab('tab-athlete')" data-tab="tab-athlete"
+                        class="settings-tab-btn px-6 py-4 text-sm font-bold border-b-2 border-cyan-500 bg-cyan-500/10 text-cyan-400 transition-all">
+                        Profile
+                    </button>
+                    <button onclick="switchSettingsTab('tab-availability')" data-tab="tab-availability"
+                        class="settings-tab-btn px-6 py-4 text-sm font-bold border-b-2 border-transparent text-slate-400 hover:text-white hover:bg-white/5 transition-all">
+                        Availability
+                    </button>
+                    <button onclick="switchSettingsTab('tab-plan')" data-tab="tab-plan"
+                        class="settings-tab-btn px-6 py-4 text-sm font-bold border-b-2 border-transparent text-slate-400 hover:text-white hover:bg-white/5 transition-all">
+                        Season Plan
+                    </button>
+                    <button onclick="switchSettingsTab('tab-zones')" data-tab="tab-zones"
+                        class="settings-tab-btn px-6 py-4 text-sm font-bold border-b-2 border-transparent text-slate-400 hover:text-white hover:bg-white/5 transition-all">
+                        Zones & Paces
+                    </button>
+                    <button onclick="switchSettingsTab('tab-integrations')" data-tab="tab-integrations"
+                        class="settings-tab-btn px-6 py-4 text-sm font-bold border-b-2 border-transparent text-slate-400 hover:text-white hover:bg-white/5 transition-all">
+                        Integrations
+                    </button>
+                </div>
+            </div>
+
+            <!-- Scrollable Content Area -->
+            <div class="flex-1 overflow-y-auto p-8 md:p-12 scroll-smooth" id="setupFormContainer">
+                <div class="max-w-3xl mx-auto space-y-8">
+
+                    <!-- TAB 1: ATHLETE (Profile & History) -->
+                    <div id="tab-athlete" class="settings-tab-content space-y-6">
+                        <section>
+                            <h3 class="text-2xl font-bold text-white mb-6">Athlete Profile</h3>
+
+                            <!-- Sport Select (Moved from Sport Settings) -->
+                            <div class="mb-8 p-6 rounded-2xl border border-white/5 bg-slate-800/20 shadow-xl">
+                                <label class="block text-xs font-bold text-slate-500 uppercase mb-3">Primary
+                                    Sport</label>
+                                <select id="sportTypeInput" onchange="toggleSportFields()"
+                                    class="glass-input w-full p-4 rounded-xl text-lg font-bold text-cyan-400">
+                                    <!-- Populated by JS -->
+                                </select>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Gym
+                                        Access</label>
+                                    <select id="gymAccessInput"
+                                        class="glass-input w-full p-3 rounded-lg text-sm transition-all focus:border-cyan-500/50">
+                                        <option value="none">None</option>
+                                        <option value="basic">Basic (Dumbbells/Bench)</option>
+                                        <option value="full">Full Gym</option>
+                                    </select>
+                                </div>
+                                <div class="space-y-3">
+                                    <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Experience
+                                        Level</label>
+                                    <div class="space-y-2">
+                                        <label
+                                            class="flex items-center gap-3 p-3 rounded-lg bg-slate-800/50 border border-white/5 cursor-pointer hover:bg-white/10 transition-colors">
+                                            <input type="radio" name="athleteExperience" value="fresh_start"
+                                                class="w-4 h-4 accent-cyan-500">
+                                            <span class="text-sm text-slate-200">Fresh Start / Rehab</span>
+                                        </label>
+                                        <label
+                                            class="flex items-center gap-3 p-3 rounded-lg bg-slate-800/50 border border-white/5 cursor-pointer hover:bg-white/10 transition-colors">
+                                            <input type="radio" name="athleteExperience" value="transfer"
+                                                class="w-4 h-4 accent-cyan-500">
+                                            <span class="text-sm text-slate-200">Transfer</span>
+                                        </label>
+                                        <label
+                                            class="flex items-center gap-3 p-3 rounded-lg bg-slate-800/50 border border-white/5 cursor-pointer hover:bg-white/10 transition-colors">
+                                            <input type="radio" name="athleteExperience" value="consistent"
+                                                class="w-4 h-4 accent-cyan-500" checked>
+                                            <span class="text-sm text-slate-200">Consistent (2+ years)</span>
+                                        </label>
+                                        <label
+                                            class="flex items-center gap-3 p-3 rounded-lg bg-slate-800/50 border border-white/5 cursor-pointer hover:bg-white/10 transition-colors">
+                                            <input type="radio" name="athleteExperience" value="high_performance"
+                                                class="w-4 h-4 accent-cyan-500">
+                                            <span class="text-sm text-slate-200">High Performance</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="space-y-6">
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Training
+                                        History</label>
+                                    <textarea id="historyInput" rows="3"
+                                        class="glass-input w-full p-3 rounded-lg text-sm"
+                                        placeholder="Briefly describe your recent volume, major events, or current state..."></textarea>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Injuries /
+                                        Constraints</label>
+                                    <textarea id="injuriesInput" rows="2"
+                                        class="glass-input w-full p-3 rounded-lg text-sm"
+                                        placeholder="Any physical limitations?"></textarea>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <!-- TAB 2: AVAILABILITY -->
+                    <div id="tab-availability" class="settings-tab-content hidden space-y-6">
+                        <section>
+                            <h3 class="text-2xl font-bold text-white mb-6">Weekly Availability</h3>
+                            <p class="text-xs text-slate-400 mb-8">Set your daily time constraints. We'll use this to
+                                optimize session placement.</p>
+
+                            <!-- Day Availability Sliders -->
+                            <div class="space-y-4 mb-8">
+                                <!-- Monday -->
+                                <div class="availability-day-row p-4 rounded-xl bg-slate-800/30 border border-white/5"
+                                    data-day="1">
+                                    <div class="flex items-center gap-4">
+                                        <span class="text-sm font-bold text-slate-400 w-12">Mon</span>
+                                        <input type="range" id="hoursDay1" min="0" max="6" step="0.5" value="2.0"
+                                            class="flex-1 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                                            oninput="updateDayHours(1)">
+                                        <span id="hoursDisplay1"
+                                            class="text-sm font-mono text-cyan-400 w-14 text-right">2.0h</span>
+                                        <label class="flex items-center gap-2 text-xs text-slate-500 cursor-pointer">
+                                            <input type="checkbox" id="splitDay1" class="accent-purple-500 w-4 h-4"
+                                                onchange="toggleSplitDay(1)">
+                                            Split
+                                        </label>
+                                    </div>
+                                    <div id="splitInputs1" class="hidden ml-16 mt-3 flex items-center gap-4 text-xs">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-slate-500">☀️ AM</span>
+                                            <input type="number" id="amHours1" min="0" max="2" step="0.5" value="1.0"
+                                                class="w-16 p-2 bg-slate-800 border border-white/10 rounded text-cyan-400 text-center"
+                                                onchange="updateSplitHours(1)">
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-slate-500">🌙 PM</span>
+                                            <input type="number" id="pmHours1" min="0" max="3" step="0.5" value="1.0"
+                                                class="w-16 p-2 bg-slate-800 border border-white/10 rounded text-cyan-400 text-center"
+                                                onchange="updateSplitHours(1)">
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- Tuesday -->
+                                <div class="availability-day-row p-4 rounded-xl bg-slate-800/30 border border-white/5"
+                                    data-day="2">
+                                    <div class="flex items-center gap-4">
+                                        <span class="text-sm font-bold text-slate-400 w-12">Tue</span>
+                                        <input type="range" id="hoursDay2" min="0" max="6" step="0.5" value="2.0"
+                                            class="flex-1 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                                            oninput="updateDayHours(2)">
+                                        <span id="hoursDisplay2"
+                                            class="text-sm font-mono text-cyan-400 w-14 text-right">2.0h</span>
+                                        <label class="flex items-center gap-2 text-xs text-slate-500 cursor-pointer">
+                                            <input type="checkbox" id="splitDay2" class="accent-purple-500 w-4 h-4"
+                                                onchange="toggleSplitDay(2)">
+                                            Split
+                                        </label>
+                                    </div>
+                                    <div id="splitInputs2" class="hidden ml-16 mt-3 flex items-center gap-4 text-xs">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-slate-500">☀️ AM</span>
+                                            <input type="number" id="amHours2" min="0" max="2" step="0.5" value="1.0"
+                                                class="w-16 p-2 bg-slate-800 border border-white/10 rounded text-cyan-400 text-center"
+                                                onchange="updateSplitHours(2)">
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-slate-500">🌙 PM</span>
+                                            <input type="number" id="pmHours2" min="0" max="3" step="0.5" value="1.0"
+                                                class="w-16 p-2 bg-slate-800 border border-white/10 rounded text-cyan-400 text-center"
+                                                onchange="updateSplitHours(2)">
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- Wednesday -->
+                                <div class="availability-day-row p-4 rounded-xl bg-slate-800/30 border border-white/5"
+                                    data-day="3">
+                                    <div class="flex items-center gap-4">
+                                        <span class="text-sm font-bold text-slate-400 w-12">Wed</span>
+                                        <input type="range" id="hoursDay3" min="0" max="6" step="0.5" value="2.0"
+                                            class="flex-1 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                                            oninput="updateDayHours(3)">
+                                        <span id="hoursDisplay3"
+                                            class="text-sm font-mono text-cyan-400 w-14 text-right">2.0h</span>
+                                        <label class="flex items-center gap-2 text-xs text-slate-500 cursor-pointer">
+                                            <input type="checkbox" id="splitDay3" class="accent-purple-500 w-4 h-4"
+                                                onchange="toggleSplitDay(3)">
+                                            Split
+                                        </label>
+                                    </div>
+                                    <div id="splitInputs3" class="hidden ml-16 mt-3 flex items-center gap-4 text-xs">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-slate-500">☀️ AM</span>
+                                            <input type="number" id="amHours3" min="0" max="2" step="0.5" value="1.0"
+                                                class="w-16 p-2 bg-slate-800 border border-white/10 rounded text-cyan-400 text-center"
+                                                onchange="updateSplitHours(3)">
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-slate-500">🌙 PM</span>
+                                            <input type="number" id="pmHours3" min="0" max="3" step="0.5" value="1.0"
+                                                class="w-16 p-2 bg-slate-800 border border-white/10 rounded text-cyan-400 text-center"
+                                                onchange="updateSplitHours(3)">
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- Thursday -->
+                                <div class="availability-day-row p-4 rounded-xl bg-slate-800/30 border border-white/5"
+                                    data-day="4">
+                                    <div class="flex items-center gap-4">
+                                        <span class="text-sm font-bold text-slate-400 w-12">Thu</span>
+                                        <input type="range" id="hoursDay4" min="0" max="6" step="0.5" value="2.0"
+                                            class="flex-1 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                                            oninput="updateDayHours(4)">
+                                        <span id="hoursDisplay4"
+                                            class="text-sm font-mono text-cyan-400 w-14 text-right">2.0h</span>
+                                        <label class="flex items-center gap-2 text-xs text-slate-500 cursor-pointer">
+                                            <input type="checkbox" id="splitDay4" class="accent-purple-500 w-4 h-4"
+                                                onchange="toggleSplitDay(4)">
+                                            Split
+                                        </label>
+                                    </div>
+                                    <div id="splitInputs4" class="hidden ml-16 mt-3 flex items-center gap-4 text-xs">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-slate-500">☀️ AM</span>
+                                            <input type="number" id="amHours4" min="0" max="2" step="0.5" value="1.0"
+                                                class="w-16 p-2 bg-slate-800 border border-white/10 rounded text-cyan-400 text-center"
+                                                onchange="updateSplitHours(4)">
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-slate-500">🌙 PM</span>
+                                            <input type="number" id="pmHours4" min="0" max="3" step="0.5" value="1.0"
+                                                class="w-16 p-2 bg-slate-800 border border-white/10 rounded text-cyan-400 text-center"
+                                                onchange="updateSplitHours(4)">
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- Friday -->
+                                <div class="availability-day-row p-4 rounded-xl bg-slate-800/30 border border-white/5"
+                                    data-day="5">
+                                    <div class="flex items-center gap-4">
+                                        <span class="text-sm font-bold text-slate-400 w-12">Fri</span>
+                                        <input type="range" id="hoursDay5" min="0" max="6" step="0.5" value="2.0"
+                                            class="flex-1 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                                            oninput="updateDayHours(5)">
+                                        <span id="hoursDisplay5"
+                                            class="text-sm font-mono text-cyan-400 w-14 text-right">2.0h</span>
+                                        <label class="flex items-center gap-2 text-xs text-slate-500 cursor-pointer">
+                                            <input type="checkbox" id="splitDay5" class="accent-purple-500 w-4 h-4"
+                                                onchange="toggleSplitDay(5)">
+                                            Split
+                                        </label>
+                                    </div>
+                                    <div id="splitInputs5" class="hidden ml-16 mt-3 flex items-center gap-4 text-xs">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-slate-500">☀️ AM</span>
+                                            <input type="number" id="amHours5" min="0" max="2" step="0.5" value="1.0"
+                                                class="w-16 p-2 bg-slate-800 border border-white/10 rounded text-cyan-400 text-center"
+                                                onchange="updateSplitHours(5)">
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-slate-500">🌙 PM</span>
+                                            <input type="number" id="pmHours5" min="0" max="3" step="0.5" value="1.0"
+                                                class="w-16 p-2 bg-slate-800 border border-white/10 rounded text-cyan-400 text-center"
+                                                onchange="updateSplitHours(5)">
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- Saturday -->
+                                <div class="availability-day-row p-4 rounded-xl bg-slate-800/30 border border-white/5"
+                                    data-day="6">
+                                    <div class="flex items-center gap-4">
+                                        <span class="text-sm font-bold text-slate-400 w-12">Sat</span>
+                                        <input type="range" id="hoursDay6" min="0" max="6" step="0.5" value="4.0"
+                                            class="flex-1 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                                            oninput="updateDayHours(6)">
+                                        <span id="hoursDisplay6"
+                                            class="text-sm font-mono text-cyan-400 w-14 text-right">4.0h</span>
+                                        <label class="flex items-center gap-2 text-xs text-slate-500 cursor-pointer">
+                                            <input type="checkbox" id="splitDay6" class="accent-purple-500 w-4 h-4"
+                                                onchange="toggleSplitDay(6)">
+                                            Split
+                                        </label>
+                                    </div>
+                                    <div id="splitInputs6" class="hidden ml-16 mt-3 flex items-center gap-4 text-xs">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-slate-500">☀️ AM</span>
+                                            <input type="number" id="amHours6" min="0" max="2" step="0.5" value="1.0"
+                                                class="w-16 p-2 bg-slate-800 border border-white/10 rounded text-cyan-400 text-center"
+                                                onchange="updateSplitHours(6)">
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-slate-500">🌙 PM</span>
+                                            <input type="number" id="pmHours6" min="0" max="4" step="0.5" value="3.0"
+                                                class="w-16 p-2 bg-slate-800 border border-white/10 rounded text-cyan-400 text-center"
+                                                onchange="updateSplitHours(6)">
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- Sunday -->
+                                <div class="availability-day-row p-4 rounded-xl bg-slate-800/30 border border-white/5"
+                                    data-day="0">
+                                    <div class="flex items-center gap-4">
+                                        <span class="text-sm font-bold text-slate-400 w-12">Sun</span>
+                                        <input type="range" id="hoursDay0" min="0" max="6" step="0.5" value="4.0"
+                                            class="flex-1 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                                            oninput="updateDayHours(0)">
+                                        <span id="hoursDisplay0"
+                                            class="text-sm font-mono text-cyan-400 w-14 text-right">4.0h</span>
+                                        <label class="flex items-center gap-2 text-xs text-slate-500 cursor-pointer">
+                                            <input type="checkbox" id="splitDay0" class="accent-purple-500 w-4 h-4"
+                                                onchange="toggleSplitDay(0)">
+                                            Split
+                                        </label>
+                                    </div>
+                                    <div id="splitInputs0" class="hidden ml-16 mt-3 flex items-center gap-4 text-xs">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-slate-500">☀️ AM</span>
+                                            <input type="number" id="amHours0" min="0" max="2" step="0.5" value="1.0"
+                                                class="w-16 p-2 bg-slate-800 border border-white/10 rounded text-cyan-400 text-center"
+                                                onchange="updateSplitHours(0)">
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-slate-500">🌙 PM</span>
+                                            <input type="number" id="pmHours0" min="0" max="4" step="0.5" value="3.0"
+                                                class="w-16 p-2 bg-slate-800 border border-white/10 rounded text-cyan-400 text-center"
+                                                onchange="updateSplitHours(0)">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
+                                <div class="p-4 bg-slate-800/50 rounded-xl border border-white/5">
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-xs text-slate-400 font-bold uppercase">Weekly
+                                            Commitment</span>
+                                        <span id="weeklyTotalHours" class="text-xl font-bold text-cyan-400">14.0h</span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Long Session
+                                        Day</label>
+                                    <select id="longRunDayInput"
+                                        class="glass-input w-full p-3 rounded-lg text-sm font-bold text-white">
+                                        <option value="1">Monday</option>
+                                        <option value="2">Tuesday</option>
+                                        <option value="3">Wednesday</option>
+                                        <option value="4">Thursday</option>
+                                        <option value="5">Friday</option>
+                                        <option value="6">Saturday</option>
+                                        <option value="0" selected>Sunday</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div id="minDaysNotification"
+                                class="hidden mt-4 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-200 text-xs flex items-center gap-3 animate-fade-in text-center justify-center">
+                                <i class="fa-solid fa-triangle-exclamation text-amber-500 text-lg"></i>
+                                <span id="minDaysMessage" class="font-medium"></span>
+                            </div>
+                        </section>
+                    </div>
+
+                    <!-- TAB 3: SEASON PLAN (ATP) -->
+                    <div id="tab-plan" class="settings-tab-content hidden space-y-6">
+                        <section>
+                            <h3 class="text-2xl font-bold text-white mb-6">Annual Training Plan</h3>
+
+                            <div class="space-y-6">
+                                <div class="p-6 rounded-2xl border border-white/5 bg-slate-800/20 shadow-xl">
+                                    <label class="block text-xs font-bold text-slate-500 uppercase mb-4">Goal
+                                        Focus</label>
+                                    <div class="flex bg-slate-900/50 p-1.5 rounded-xl border border-white/5">
+                                        <button type="button" id="goal-event-btn" onclick="toggleGoalType('event')"
+                                            class="flex-1 py-3 rounded-lg text-sm font-bold transition-all bg-cyan-500/20 text-cyan-400 shadow-lg">
+                                            <i class="fa-solid fa-trophy mr-2"></i> Race/Event
+                                        </button>
+                                        <button type="button" id="goal-fitness-btn" onclick="toggleGoalType('fitness')"
+                                            class="flex-1 py-3 rounded-lg text-sm font-bold text-slate-400 hover:text-white transition-all">
+                                            <i class="fa-solid fa-heart-pulse mr-2"></i> Fitness Only
+                                        </button>
+                                    </div>
+                                    <input type="hidden" id="trainingGoalInput" value="event">
+                                </div>
+
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div id="raceDateContainer"
+                                        class="p-6 rounded-2xl border border-white/5 bg-slate-800/20">
+                                        <label
+                                            class="block text-xs font-bold text-slate-500 uppercase mb-2 text-emerald-400">Target
+                                            Race Date</label>
+                                        <input type="date" id="raceDateInput"
+                                            class="glass-input w-full p-4 rounded-xl text-lg font-mono">
+                                    </div>
+                                    <div id="fitnessDurationContainer"
+                                        class="hidden p-6 rounded-2xl border border-white/5 bg-slate-800/20">
+                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Block
+                                            Duration</label>
+                                        <div
+                                            class="glass-input w-full p-4 rounded-xl text-lg text-slate-400 font-bold border-dashed text-center">
+                                            16 Weeks (Auto)
+                                        </div>
+                                    </div>
+                                    <div class="p-6 rounded-2xl border border-white/5 bg-slate-800/20">
+                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Goal Target
+                                            / Pacing</label>
+                                        <input type="text" id="goalTimeInput"
+                                            class="glass-input w-full p-4 rounded-xl text-lg font-mono text-center"
+                                            placeholder="HH:MM:SS">
+                                    </div>
+                                </div>
+
+                                <!-- Sport Specific Basics (Goal Distance/Start Date) -->
+                                <div id="running-plan-basics"
+                                    class="p-6 rounded-2xl border border-white/5 bg-slate-800/20 space-y-6">
+                                    <h4 class="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
+                                        <i class="fa-solid fa-person-running"></i> Run Specifics
+                                    </h4>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div>
+                                            <label
+                                                class="block text-xs font-bold text-slate-500 uppercase mb-2">Distance</label>
+                                            <select id="raceTypeInput"
+                                                class="glass-input w-full p-3 rounded-lg text-sm">
+                                                <option value="Marathon">Marathon</option>
+                                                <option value="Half Marathon">Half Marathon</option>
+                                                <option value="10k">10k</option>
+                                                <option value="5k">5k</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Plan
+                                                Start Date</label>
+                                            <input type="date" id="planStartDateInputRun"
+                                                class="glass-input w-full p-3 rounded-lg text-sm">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div id="cycling-plan-basics"
+                                    class="hidden p-6 rounded-2xl border border-white/5 bg-slate-800/20 space-y-6">
+                                    <h4 class="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
+                                        <i class="fa-solid fa-bicycle"></i> Cycle Specifics
+                                    </h4>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div>
+                                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Event
+                                                Type</label>
+                                            <select id="raceTypeInputCycle"
+                                                class="glass-input w-full p-3 rounded-lg text-sm">
+                                                <option value="Gran Fondo">Gran Fondo</option>
+                                                <option value="Century">Century (160k)</option>
+                                                <option value="Time Trial">Time Trial</option>
+                                                <option value="General Fitness">General Fitness</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Plan
+                                                Start Date</label>
+                                            <input type="date" id="planStartDateInputCycle"
+                                                class="glass-input w-full p-3 rounded-lg text-sm">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="p-6 rounded-2xl border border-white/5 bg-slate-800/20">
+                                    <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Training
+                                        Preferences</label>
+                                    <textarea id="preferencesInput" rows="3"
+                                        class="glass-input w-full p-3 rounded-lg text-sm"
+                                        placeholder="Specific days off, key workout preferences, or life constraints..."></textarea>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <!-- TAB 4: ZONES & PACES -->
+                    <div id="tab-zones" class="settings-tab-content hidden space-y-6">
+                        <section>
+                            <h3 class="text-2xl font-bold text-white mb-6">Physiology & Zones</h3>
+
+                            <!-- Run Paces -->
+                            <div id="training-paces-section"
+                                class="mb-8 p-6 rounded-2xl border border-white/5 bg-slate-800/20">
+                                <h4 class="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                                    <i class="fa-solid fa-bolt text-cyan-400"></i> Running Zones
+                                </h4>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                                    <div>
+                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Recent 5K
+                                            PB/Time</label>
+                                        <input type="text" id="settings-5k-input"
+                                            class="glass-input w-full p-4 rounded-xl text-2xl font-mono text-center text-cyan-400"
+                                            placeholder="22:30" maxlength="5" oninput="updateSettingsPaces(this.value)">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Fitness
+                                            State</label>
+                                        <select id="settings-fitness-context"
+                                            class="glass-input w-full p-4 rounded-xl text-sm"
+                                            onchange="updateSettingsPaces(document.getElementById('settings-5k-input')?.value)">
+                                            <option value="rusty">Rusty (Returning)</option>
+                                            <option value="current" selected>Current Fitness</option>
+                                            <option value="improved">Peaking / Sharp</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-4 mb-6">
+                                    <div
+                                        class="glass-panel p-4 rounded-xl border border-white/10 text-center bg-slate-900/50">
+                                        <div class="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Threshold
+                                            (LT)</div>
+                                        <div class="text-2xl font-bold text-cyan-400 font-mono" id="settings-lt-pace">
+                                            --:--</div>
+                                        <div class="text-[10px] text-slate-500 mt-1">min / km</div>
+                                    </div>
+                                    <div
+                                        class="glass-panel p-4 rounded-xl border border-white/10 text-center bg-slate-900/50">
+                                        <div class="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Easy
+                                            (Zone 2)</div>
+                                        <div class="text-2xl font-bold text-emerald-400 font-mono"
+                                            id="settings-easy-pace">--:--</div>
+                                        <div class="text-[10px] text-slate-500 mt-1">min / km</div>
+                                    </div>
+                                </div>
+
+                                <details class="group bg-slate-900/40 rounded-xl border border-white/5 overflow-hidden">
+                                    <summary
+                                        class="flex items-center justify-between p-3 cursor-pointer hover:bg-white/5 transition-colors">
+                                        <span class="text-xs font-bold text-slate-500 uppercase">🧪 Manual Lab Test
+                                            Override</span>
+                                        <i
+                                            class="fa-solid fa-chevron-down text-slate-600 group-open:rotate-180 transition-transform"></i>
+                                    </summary>
+                                    <div class="p-4 pt-0 border-t border-white/5 mt-2 flex items-center gap-3">
+                                        <input type="text" id="settings-manual-lt"
+                                            class="glass-input flex-1 p-2 rounded-lg text-sm font-mono text-center"
+                                            placeholder="4:30" maxlength="5">
+                                        <span class="text-xs text-slate-500">min/km</span>
+                                        <button onclick="applyManualLTPace()"
+                                            class="px-4 py-2 bg-cyan-500/20 text-cyan-400 text-xs font-bold rounded-lg border border-cyan-500/30 hover:bg-cyan-500/30">Apply</button>
+                                    </div>
+                                </details>
+                            </div>
+
+                            <!-- Progression Logic -->
+                            <div class="p-6 rounded-2xl border border-white/5 bg-slate-800/20 shadow-xl">
+                                <h4 class="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                                    <i class="fa-solid fa-chart-line text-purple-400"></i> Progression Engine
+                                </h4>
+
+                                <div id="running-config-container" class="space-y-6">
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label
+                                                class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Start
+                                                Volume (km)</label>
+                                            <input type="number" id="target-volume"
+                                                class="glass-input w-full p-3 rounded-lg text-sm" value="30">
+                                        </div>
+                                        <div>
+                                            <label
+                                                class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Longest
+                                                Session (km)</label>
+                                            <input type="number" id="target-long-run-run"
+                                                class="glass-input w-full p-3 rounded-lg text-sm" value="10">
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label
+                                                class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Weekly
+                                                Ramp</label>
+                                            <select id="progressionRateInputRun"
+                                                class="glass-input w-full p-3 rounded-lg text-xs">
+                                                <option value="0.05">Conservative (5%)</option>
+                                                <option value="0.075" selected>Standard (7.5%)</option>
+                                                <option value="0.10">Aggressive (10%)</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label
+                                                class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Long
+                                                Ramp</label>
+                                            <select id="longRunProgressionInput"
+                                                class="glass-input w-full p-3 rounded-lg text-xs">
+                                                <option value="1.0">Linear (+1km)</option>
+                                                <option value="1.5" selected>Normal (+1.5km)</option>
+                                                <option value="2.0">Fast (+2km)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="mt-4">
+                                        <h5 class="text-[10px] font-bold text-slate-500 uppercase mb-2 text-cyan-400">
+                                            Run Volume Preview</h5>
+                                        <div id="progression-preview-run"
+                                            class="bg-slate-950/50 rounded-xl p-4 text-[10px] font-mono text-slate-400 max-h-32 overflow-y-auto border border-white/5">
+                                            Calculating progression...
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div id="cycling-config-container" class="hidden space-y-6">
+                                    <div class="grid grid-cols-3 gap-4">
+                                        <div>
+                                            <label
+                                                class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Current
+                                                CTL</label>
+                                            <input type="number" id="current-fitness"
+                                                class="glass-input w-full p-3 rounded-lg text-sm" value="40">
+                                        </div>
+                                        <div>
+                                            <label
+                                                class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Start
+                                                Load</label>
+                                            <input type="number" id="start-tss"
+                                                class="glass-input w-full p-3 rounded-lg text-sm" value="300">
+                                        </div>
+                                        <div>
+                                            <label
+                                                class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Long
+                                                (h)</label>
+                                            <input type="number" id="target-long-run"
+                                                class="glass-input w-full p-3 rounded-lg text-sm" value="2.0">
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Target
+                                            Ramp Rate</label>
+                                        <select id="progressionRateInputCycle"
+                                            class="glass-input w-full p-3 rounded-lg text-sm">
+                                            <option value="3">3 (Low Intensity)</option>
+                                            <option value="5" selected>5 (Standard)</option>
+                                            <option value="8">8 (Aggressive)</option>
+                                        </select>
+                                    </div>
+                                    <div id="rampRateWarning"
+                                        class="hidden p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-200 text-[10px] font-bold text-center">
+                                        ⚠️ High Ramp Rate (>6) increases injury risk!
+                                    </div>
+                                    <div class="mt-4">
+                                        <h5 class="text-[10px] font-bold text-slate-500 uppercase mb-2 text-purple-400">
+                                            Cycling Load Preview</h5>
+                                        <div id="progression-preview-cycle"
+                                            class="bg-slate-950/50 rounded-xl p-4 text-[10px] font-mono text-slate-400 max-h-32 overflow-y-auto border border-white/5">
+                                            Calculating load...
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <!-- TAB 4: INTEGRATIONS -->
+                    <div id="tab-integrations" class="settings-tab-content hidden space-y-6">
+                        <section>
+                            <h3 class="text-2xl font-bold text-white mb-6">Integrations & AI</h3>
+
+                            <!-- Intervals.icu -->
+                            <div class="p-6 rounded-2xl border border-white/5 bg-slate-800/20 shadow-xl">
+                                <h4 class="text-lg font-bold text-emerald-400 mb-4 flex items-center gap-2">
+                                    <i class="fa-solid fa-bolt"></i> Intervals.icu
+                                </h4>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+                                    <div>
+                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">API
+                                            Key</label>
+                                        <input type="password" id="apiKeyInput"
+                                            class="glass-input w-full p-3 rounded-lg text-sm"
+                                            placeholder="Intervals.icu API Key">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Athlete
+                                            ID</label>
+                                        <input type="text" id="athleteIdInput"
+                                            class="glass-input w-full p-3 rounded-lg text-sm" placeholder="e.g. i12345">
+                                    </div>
+                                </div>
+                                <button onclick="checkConnectionAndHistory()" type="button"
+                                    class="px-6 py-2 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 text-sm font-bold border border-emerald-500/30 transition-colors">
+                                    Check Connection
+                                </button>
+                                <div id="connectionStatus" class="text-sm mt-3"></div>
+
+                                <!-- Intervals Athlete Info Widget -->
+                                <div id="intervals-athlete-info"
+                                    class="hidden mt-4 p-4 rounded-xl border animate-fade-in"
+                                    style="background: var(--bg-card, #ffffff); border-color: var(--border-color, #e5e5e5);">
+                                    <!-- Content preserved generically from original, just placeholders or same ID blocks -->
+                                    <div class="flex items-center justify-between mb-3">
+                                        <div class="text-xs font-bold text-emerald-600 uppercase tracking-wider">
+                                            Connected</div>
+                                        <div class="text-[10px] text-emerald-500"><i
+                                                class="fa-solid fa-circle text-[6px]"></i>
+                                            Intervals.icu</div>
+                                    </div>
+                                    <div class="grid grid-cols-3 gap-3 text-xs">
+                                        <div class="p-3 rounded-lg text-center bg-slate-100/50">
+                                            <span class="block text-[10px] text-slate-500">Athlete</span>
+                                            <span id="athlete-name" class="font-bold text-slate-900">—</span>
+                                        </div>
+                                        <div class="p-3 rounded-lg text-center bg-slate-100/50">
+                                            <span class="block text-[10px] text-slate-500">Weight</span>
+                                            <span id="athlete-weight" class="font-bold text-slate-900">—</span>
+                                        </div>
+                                        <div class="p-3 rounded-lg text-center bg-slate-100/50">
+                                            <span id="athlete-metric-label" class="block text-[10px] text-slate-500">LT
+                                                Pace</span>
+                                            <span id="athlete-fitness" class="font-bold text-cyan-600">—</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- AI Provider -->
+                            <div class="p-6 rounded-2xl border border-white/5 bg-slate-800/20 shadow-xl">
+                                <h4 class="text-lg font-bold text-purple-400 mb-4 flex items-center gap-2">
+                                    <i class="fa-solid fa-brain"></i> AI Provider
+                                </h4>
+                                <!-- [NEW] Explicit AI Optional Notice -->
+                                <div
+                                    class="p-4 mb-6 rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 border border-white/10 flex items-start gap-4">
+                                    <div
+                                        class="w-10 h-10 rounded-full bg-cyan-500/10 flex flex-shrink-0 items-center justify-center">
+                                        <i class="fa-solid fa-microchip text-cyan-400"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-sm font-bold text-white mb-1">AI is Optional</h4>
+                                        <p class="text-xs text-slate-400 leading-relaxed">
+                                            Your base plan is generated by our <strong>Deterministic Rule
+                                                Engine</strong> to
+                                            ensure perfect structure.
+                                            AI is only used for <span class="text-white">Pro Adjustments</span> if you
+                                            enable it.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">AI Provider</label>
+                                <select id="aiProviderSelect" onchange="toggleProviderFields()"
+                                    class="glass-input w-full p-3 rounded-lg text-sm mb-4">
+                                    <option value="openai">OpenAI (GPT-4o)</option>
+                                    <option value="gemini">Google Gemini</option>
+                                    <option value="deepseek">DeepSeek (V3)</option>
+                                    <option value="openrouter">OpenRouter (Free Models)</option>
+                                    <option value="mistral">Mistral API</option>
+                                </select>
+                                <div id="openai-field">
+                                    <input type="password" id="aiApiKeyInput"
+                                        class="glass-input w-full p-3 rounded-lg text-sm" placeholder="OpenAI API Key">
+                                </div>
+                                <div id="gemini-field" class="hidden">
+                                    <input type="password" id="geminiApiKeyInput"
+                                        class="glass-input w-full p-3 rounded-lg text-sm" placeholder="Gemini API Key">
+                                </div>
+                                <div id="deepseek-field" class="hidden">
+                                    <input type="password" id="deepseekApiKeyInput"
+                                        class="glass-input w-full p-3 rounded-lg text-sm"
+                                        placeholder="DeepSeek API Key">
+                                </div>
+                                <div id="openrouter-field" class="hidden">
+                                    <input type="password" id="openRouterApiKeyInput"
+                                        value="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"
+                                        class="glass-input w-full p-3 rounded-lg text-sm"
+                                        placeholder="OpenRouter API Key">
+                                </div>
+                                <div id="mistral-field" class="hidden">
+                                    <input type="password" id="mistralApiKeyInput"
+                                        class="glass-input w-full p-3 rounded-lg text-sm" placeholder="Mistral API Key">
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <!-- Save Footer -->
+                    <div
+                        class="pt-8 pb-12 border-t border-white/5 mt-8 sticky bottom-0 bg-slate-900/95 backdrop-blur-md p-6 -mx-6 -mb-6 shadow-2xl z-10 border-t-cyan-500/20">
+                        <button onclick="saveSettings()"
+                            class="w-full py-4 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold text-lg shadow-xl shadow-cyan-500/20 hover:scale-[1.02] transition-transform">
+                            Save & Generate Plan
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+
+            <script>
+                function switchSettingsTab(tabId) {
+                    // Hide all tabs
+                    document.querySelectorAll('.settings-tab-content').forEach(el => el.classList.add('hidden'));
+                    // Show target tab
+                    const target = document.getElementById(tabId);
+                    if (target) {
+                        target.classList.remove('hidden');
+                        target.classList.add('animate-fade-in');
+                    }
+
+                    // Update buttons
+                    document.querySelectorAll('.settings-tab-btn').forEach(btn => {
+                        const isTarget = btn.getAttribute('data-tab') === tabId;
+                        if (isTarget) {
+                            btn.className = 'settings-tab-btn px-6 py-4 text-sm font-bold border-b-2 border-cyan-500 bg-cyan-500/10 text-cyan-400 transition-all';
+                        } else {
+                            btn.className = 'settings-tab-btn px-6 py-4 text-sm font-bold border-b-2 border-transparent text-slate-400 hover:text-white hover:bg-white/5 transition-all';
+                        }
+                    });
+                }
+            </script>
+            <!-- AI Loading Overlay -->
+            <div id="aiLoadingOverlay"
+                class="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-sm flex flex-col items-center justify-center hidden">
+                <div class="relative w-24 h-24 mb-8">
+                    <div class="absolute inset-0 border-4 border-cyan-500/30 rounded-full animate-spin-slow"></div>
+                    <div class="absolute inset-0 border-t-4 border-cyan-400 rounded-full animate-spin"></div>
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <i class="fa-solid fa-brain text-4xl text-cyan-400 animate-pulse translate-y-1"></i>
+                    </div>
+                </div>
+                <h3 class="text-2xl font-bold text-white mb-2" id="loadingTitle">Generating Plan...</h3>
+                <p class="text-slate-400 text-sm animate-pulse" id="loadingMessage">Crafting your perfect training
+                    schedule.</p>
+                <div class="mt-8 w-3/4 max-w-2xl">
+                    <div class="text-[10px] text-slate-500 mb-1 text-center">AI Input Prompt (Debug View)</div>
+                    <textarea id="loading-debug-prompt"
+                        class="w-full h-32 bg-slate-950/80 text-cyan-400 font-mono text-[10px] p-4 rounded-xl border border-white/10 overflow-y-auto"
+                        readonly></textarea>
+                </div>
+            </div>
+
+            <!-- Confirmation Modal -->
+            <div id="confirmationModal"
+                class="fixed inset-0 z-[60] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center hidden">
+                <div
+                    class="bg-slate-900 border border-white/10 rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl transform transition-all scale-100">
+                    <h3 class="text-xl font-bold text-white mb-2" id="confirmTitle">Confirm Action</h3>
+                    <p class="text-slate-400 mb-6" id="confirmMessage">Are you sure?</p>
+                    <div class="flex justify-end gap-3">
+                        <button id="confirmCancelBtn"
+                            class="px-4 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors">Cancel</button>
+                        <button id="confirmOkBtn"
+                            class="px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-white font-bold shadow-lg shadow-cyan-500/20 transition-all">Confirm</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <!-- Core (State & Constants - load first) -->
+    <script src="js/core/constants.js"></script>
+    <script src="js/core/unit-utils.js"></script>
+    <script src="js/core/training-rules.js"></script>
+    <!-- Scheduling Feature (Modular) - replaces smart-scheduler.js -->
+    <script src="js/features/scheduling/types/scheduling-types.js"></script>
+    <script src="js/features/scheduling/services/progression-engine.js"></script>
+    <script src="js/features/scheduling/services/frequency-optimizer.js"></script>
+    <script src="js/features/scheduling/services/volume-distributor.js"></script>
+    <script src="js/features/scheduling/services/template-generator.js"></script>
+    <script src="js/features/scheduling/services/wizard-helpers.js"></script>
+    <script src="js/features/scheduling/index.js"></script>
+    <script src="js/core/load-engine.js?v=1"></script>
+    <script src="js/core/plan-validator.js"></script>
+    <script src="js/core/state.js"></script>
+    <script src="js/utils.js"></script>
+
+    <!-- Services & API -->
+    <script src="js/goal-assessment.js"></script>
+    <!-- Intervals API Feature (Modular) -->
+    <script src="js/features/intervals-api/services/api-client.js"></script>
+    <script src="js/features/intervals-api/services/step-formatter.js"></script>
+    <script src="js/features/intervals-api/services/workout-uploader.js"></script>
+    <script src="js/features/intervals-api/services/targets-service.js"></script>
+    <script src="js/features/intervals-api/services/fitness-fetcher.js"></script>
+    <script src="js/features/intervals-api/services/zones-fetcher.js"></script>
+    <script src="js/features/intervals-api/index.js"></script>
+    <script src="js/workout-hydration.js"></script>
+
+    <!-- AI Feature (Modular) - replaces ai-service.js -->
+    <script src="js/workout-library.js"></script>
+    <script src="js/ai/prompt-builder.js"></script>
+    <script src="js/features/ai/services/context-builder.js"></script>
+    <script src="js/features/ai/services/response-parser.js"></script>
+    <script src="js/features/ai/services/provider-client.js"></script>
+    <script src="js/features/ai/services/ai-orchestrator.js"></script>
+    <script src="js/features/ai/index.js"></script>
+
+    <!-- Sports Adapters -->
+    <script src="js/sports/sport-adapter.js"></script>
+    <script src="js/sports/running-adapter.js"></script>
+    <script src="js/sports/cycling-adapter.js"></script>
+    <script src="js/sports/registry.js"></script>
+
+    <!-- UI Components -->
+    <script src="js/ui/modals.js"></script>
+    <script src="js/ui/schedule-template.js"></script>
+    <!-- Onboarding Feature (Modular) -->
+    <script src="js/features/onboarding/services/wizard-state.js"></script>
+    <script src="js/features/onboarding/services/step-renderer.js"></script>
+    <script src="js/features/onboarding/services/onboarding-logic.js"></script>
+    <script src="js/features/onboarding/services/connection-finalizer.js"></script>
+    <script src="js/features/onboarding/index.js"></script>
+    <script src="js/ui/weekly-checkin.js"></script>
+    <script src="js/ui/template-editor.js"></script>
+    <script src="js/ui/suggestions-ui.js"></script>
+
+    <!-- Core Logic -->
+    <script src="js/core/readiness-engine.js"></script>
+    <script src="js/core/readiness-settings.js"></script>
+    <script src="js/core/adjustment-suggestions.js"></script>
+
+    <!-- Weekly Plan Feature (Modular) - services extracted from weekly-ui.js -->
+    <script src="js/ui/config/ui-constants.js"></script>
+    <script src="js/ui/renderers/WeekDetailRenderer.js"></script>
+    <script src="js/features/weekly-plan/services/TemplateConverter.js"></script>
+    <script src="js/features/weekly-plan/services/workout-builder.js"></script>
+    <script src="js/features/weekly-plan/services/drag-handlers.js"></script>
+    <script src="js/features/weekly-plan/services/availability-editor.js"></script>
+    <script src="js/features/weekly-plan/services/week-actions.js"></script>
+    <script src="js/features/weekly-plan/index.js"></script>
+    <script src="js/weekly-ui.js"></script>
+    <script src="js/views/mobile-today.js"></script>
+    <script src="js/smart-planner.js"></script>
+    <script src="js/progression.js"></script>
+    <script>
+        function scrollToStep(id) {
+            document.getElementById(id).scrollIntoView({ behavior: 'smooth' });
+        }
+    </script>
+    <!-- AI Context Debugger -->
+    <div id="aiContextDebug"
+        class="fixed bottom-4 right-4 z-[70] w-96 bg-slate-900/95 border border-white/10 rounded-xl shadow-2xl backdrop-blur-md hidden flex flex-col max-h-[500px] transition-all duration-300">
+        <div class="flex items-center justify-between p-3 border-b border-white/10 bg-slate-800/50 rounded-t-xl">
+            <h4 class="text-xs font-bold text-cyan-400 uppercase tracking-wider"><i class="fa-solid fa-code mr-2"></i>AI
+                Context (Debug)</h4>
+            <button onclick="document.getElementById('aiContextDebug').classList.add('hidden')"
+                class="text-slate-400 hover:text-white transition-colors">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+        <div class="p-0 flex-1 overflow-hidden relative">
+            <textarea id="aiContextText" readonly
+                class="w-full h-64 p-3 bg-transparent text-[10px] font-mono text-slate-300 resize-none focus:outline-none custom-scrollbar"
+                spellcheck="false"></textarea>
+            <button
+                onclick="navigator.clipboard.writeText(document.getElementById('aiContextText').value); showToast('Copied to clipboard!')"
+                class="absolute bottom-2 right-2 px-2 py-1 bg-slate-700/80 hover:bg-slate-600 text-[10px] text-white rounded border border-white/10 transition-colors">
+                <i class="fa-regular fa-copy mr-1"></i> Copy
+            </button>
+        </div>
+    </div>
+
+    <!-- ==========================================
+         BOTTOM TAB BAR (Mobile) - Simplified 3 Tabs
+         ========================================== -->
+    <nav class="bottom-tabs" id="bottomTabs">
+        <div class="bottom-tabs-inner">
+            <a href="#today" class="tab-item active" data-tab="today" onclick="switchTab('today')">
+                <i class="fa-solid fa-house tab-icon"></i>
+                <span class="tab-label">Today</span>
+            </a>
+            <a href="#progress" class="tab-item" data-tab="progress" onclick="switchTab('progress')">
+                <i class="fa-solid fa-chart-line tab-icon"></i>
+                <span class="tab-label">Progress</span>
+            </a>
+            <a href="#settings" class="tab-item" data-tab="settings" onclick="switchTab('settings')">
+                <i class="fa-solid fa-gear tab-icon"></i>
+                <span class="tab-label">Settings</span>
+            </a>
+        </div>
+    </nav>
+
+    <!-- Tab Switching Script -->
+    <script>
+        // Current active tab
+        let currentTab = 'today';
+
+        function switchTab(tabId) {
+            // Update active state
+            document.querySelectorAll('.tab-item').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.tab === tabId);
+            });
+
+            currentTab = tabId;
+            console.log('[Tabs] Switched to:', tabId);
+
+            // Handle view switching
+            const mainContent = document.getElementById('mainScrollArea');
+            const sidebar = document.querySelector('aside');
+            const mobileTodayView = document.getElementById('mobileTodayView');
+
+            // Reset views
+            if (mainContent) mainContent.style.display = '';
+            if (sidebar) sidebar.style.display = '';
+            hideStatsView();
+
+            switch (tabId) {
+                case 'today':
+                case 'plan':
+                    // Show main content with mobile today view
+                    if (mainContent) mainContent.style.display = '';
+                    // Hide sidebar on mobile
+                    if (window.innerWidth < 1024 && sidebar) {
+                        sidebar.style.display = 'none';
+                    }
+                    hideStatsView();
+                    hideMobileSettings();
+                    // Render mobile today view if on mobile
+                    if (window.innerWidth < 1024 && typeof renderMobileTodayView === 'function') {
+                        renderMobileTodayView();
+                    }
+                    break;
+
+                case 'progress':
+                case 'stats':
+                    // Show stats view
+                    if (window.innerWidth < 1024 && sidebar) {
+                        sidebar.style.display = 'none';
+                    }
+                    hideMobileSettings();
+                    showStatsView();
+                    break;
+
+                case 'settings':
+                case 'setup':
+                    // On mobile, show settings overlay with close button
+                    hideStatsView();
+                    if (window.innerWidth < 1024) {
+                        showMobileSettings();
+                    }
+                    break;
+
+                case 'profile':
+                    // Profile tab - show settings/theme options
+                    showProfileView();
+                    break;
+            }
+
+            // Scroll to top
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // Mobile Settings Overlay with Close Button
+        function showMobileSettings() {
+            let container = document.getElementById('mobileSettingsOverlay');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'mobileSettingsOverlay';
+                document.body.appendChild(container);
+            }
+
+            const sidebar = document.querySelector('aside');
+            const sidebarContent = sidebar ? sidebar.innerHTML : '';
+
+            container.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: var(--tab-bar-height, 64px);
+                background: var(--bg-primary, #0f172a);
+                z-index: 100;
+                overflow-y: auto;
+                animation: slideInUp 0.3s ease;
+            `;
+
+            container.innerHTML = `
+                <div style="position: sticky; top: 0; z-index: 10; background: var(--bg-primary, #0f172a); border-bottom: 1px solid var(--border-light, rgba(255,255,255,0.1)); padding: 16px 20px; display: flex; justify-content: space-between; align-items: center;">
+                    <h2 style="font-size: 18px; font-weight: 700; color: var(--text-primary, white); margin: 0;">Settings</h2>
+                    <button onclick="closeMobileSettings()" style="width: 40px; height: 40px; border-radius: 50%; background: var(--bg-card, rgba(255,255,255,0.1)); border: none; color: var(--text-primary, white); font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                        <i class="fa-solid fa-times"></i>
+                    </button>
+                </div>
+                <div style="padding: 20px;">
+                    ${sidebarContent}
+                </div>
+            `;
+        }
+
+        function closeMobileSettings() {
+            hideMobileSettings();
+            switchTab('today');
+        }
+
+        function hideMobileSettings() {
+            const container = document.getElementById('mobileSettingsOverlay');
+            if (container) {
+                container.remove();
+            }
+        }
+
+        // Expose close function globally
+        window.closeMobileSettings = closeMobileSettings;
+
+        function showStatsView() {
+            let container = document.getElementById('statsViewContainer');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'statsViewContainer';
+                container.className = 'fixed inset-0 z-40 overflow-auto';
+                document.body.appendChild(container);
+            }
+
+            // Styling for both desktop and mobile
+            const isDesktop = window.innerWidth >= 1025;
+            if (isDesktop) {
+                // Desktop: overlay with centered panel
+                container.style.cssText = 'background: rgba(0,0,0,0.5); display: flex; align-items: flex-start; justify-content: center; padding-top: 40px;';
+                container.innerHTML = `
+                    <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-2xl w-full mx-4 my-8 max-h-[90vh] overflow-auto relative">
+                        <button onclick="hideStatsView()" 
+                            class="absolute top-4 right-4 w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors z-10">
+                            <i class="fa-solid fa-times text-slate-600 dark:text-slate-300"></i>
+                        </button>
+                        ${window.StatsView ? window.StatsView.render() : '<div class="p-8 text-center">Loading stats...</div>'}
+                    </div>
+                `;
+            } else {
+                // Mobile: full screen with close header
+                container.style.cssText = `
+                    background: var(--bg-primary, #0f172a);
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: var(--tab-bar-height, 64px);
+                    z-index: 90;
+                    overflow-y: auto;
+                `;
+                container.innerHTML = `
+                    <div style="position: sticky; top: 0; z-index: 10; background: var(--bg-primary, #0f172a); border-bottom: 1px solid var(--border-light, rgba(255,255,255,0.1)); padding: 16px 20px; display: flex; justify-content: space-between; align-items: center;">
+                        <h2 style="font-size: 18px; font-weight: 700; color: var(--text-primary, white); margin: 0;">Progress</h2>
+                        <button onclick="closeMobileStats()" style="width: 40px; height: 40px; border-radius: 50%; background: var(--bg-card, rgba(255,255,255,0.1)); border: none; color: var(--text-primary, white); font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                            <i class="fa-solid fa-times"></i>
+                        </button>
+                    </div>
+                    <div style="padding: 20px;">
+                        ${window.StatsView ? window.StatsView.render() : '<div class="p-8 text-center">Loading stats...</div>'}
+                    </div>
+                `;
+            }
+
+            container.style.display = isDesktop ? 'flex' : 'block';
+
+            // Auto-refresh stats
+            if (window.StatsView) {
+                setTimeout(() => StatsView.refresh(), 100);
+            }
+        }
+
+        // Alias for desktop sidebar button
+        function openStatsView() {
+            showStatsView();
+        }
+
+        function hideStatsView() {
+            const container = document.getElementById('statsViewContainer');
+            if (container) container.style.display = 'none';
+            // Also hide profile view if open
+            const profileContainer = document.getElementById('profileViewContainer');
+            if (profileContainer) profileContainer.style.display = 'none';
+        }
+
+        function closeMobileStats() {
+            hideStatsView();
+            switchTab('today');
+        }
+        window.closeMobileStats = closeMobileStats;
+
+        function showProfileView() {
+            let container = document.getElementById('profileViewContainer');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'profileViewContainer';
+                container.className = 'fixed inset-0 z-40 overflow-auto pb-20';
+                container.style.cssText = 'background: var(--bg-secondary, #f7f7f8); padding-bottom: calc(var(--tab-bar-height, 64px) + 20px);';
+                document.body.appendChild(container);
+            }
+            container.innerHTML = `
+                <div class="p-6 max-w-md mx-auto space-y-6">
+                    <h2 class="text-2xl font-bold text-center">⚙️ Settings</h2>
+                    
+                    <div class="stats-card">
+                        <h3 class="font-semibold mb-4">Appearance</h3>
+                        <div class="flex items-center justify-between">
+                            <span>Dark Mode</span>
+                            <button onclick="toggleTheme(); switchTab('profile');" 
+                                class="px-4 py-2 rounded-lg border transition-colors"
+                                style="background: var(--bg-card);">
+                                <i class="fa-solid ${document.documentElement.getAttribute('data-theme') === 'dark' ? 'fa-sun' : 'fa-moon'} mr-2"></i>
+                                ${document.documentElement.getAttribute('data-theme') === 'dark' ? 'Light' : 'Dark'}
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="stats-card">
+                        <h3 class="font-semibold mb-4">Account</h3>
+                        <p class="text-secondary text-sm">Connected to Intervals.icu</p>
+                        <p class="text-muted text-xs mt-1" id="profileAthleteId">Athlete ID: ${state.athleteId || 'Not connected'}</p>
+                    </div>
+                    
+                    <!-- Notifications disabled - requires auth/login
+                    <div class="stats-card">
+                        <h3 class="font-semibold mb-4">🔔 Notifications</h3>
+                        <p class="text-muted text-sm">Coming soon - requires login</p>
+                    </div>
+                    -->
+                    
+                    <div class="text-center">
+                        <button onclick="switchTab('plan')" 
+                            class="px-6 py-3 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white rounded-xl font-semibold">
+                            <i class="fa-solid fa-arrow-left mr-2"></i> Back to Plan
+                        </button>
+                    </div>
+                </div>
+            `;
+            container.style.display = 'block';
+
+            // Hide other views
+            hideStatsView();
+        }
+    </script>
+
+    <!-- UI Managers -->
+    <script src="js/ui/settings-manager.js"></script>
+
+    <!-- Rule-Based Engine Modules -->
+    <!-- zone-service.js MUST load first - it is the SINGLE SOURCE OF TRUTH for all pace zones -->
+    <script src="js/core/zone-service.js?v=5"></script>
+    <!-- duration-service.js depends on zone-service.js for accurate zone-based duration calculations -->
+    <script src="js/core/duration-service.js?v=1"></script>
+    <script src="js/ui/ThresholdEstimator.js?v=2"></script>
+    <script src="js/ui/pro-gates.js?v=2"></script>
+    <script src="js/core/workout-library-structured.js?v=2"></script>
+    <script src="js/core/deterministic-scheduler.js?v=2"></script>
+
+    <!-- Payment Service -->
+    <script src="js/features/payment/payment-service.js?v=2"></script>
+
+    <!-- Views -->
+    <script src="js/views/stats-view.js?v=2"></script>
+
+    <!-- [NEW] Optimization Layer -->
+    <script src="js/features/optimization/PlanValidator.js"></script>
+
+    <!-- Entry Point - loading main.js and ui.js at the end to ensure all dependencies are resolved -->
+    <script src="js/main.js?v=2"></script>
+    <!-- UI Controllers & Renderers (Extracted from ui.js) -->
+    <script src="js/ui/panels/athlete-panel.js"></script>
+    <script src="js/ui/panels/analysis-panel.js"></script>
+    <script src="js/features/onboarding/connection-manager.js"></script>
+    <script src="js/ui/configurator/configurator-ui.js"></script>
+    <script src="js/ui/modals/debug-modal.js"></script>
+    <script src="js/ui/renderers/ProgressionRenderer.js"></script>
+    <script src="js/ui/renderers/WeekDetailRenderer.js"></script>
+    <script src="js/features/weekly-plan/services/drag-handlers.js"></script>
+    <script src="js/ui/workout-editor.js"></script>
+    <script src="js/ui.js?v=3"></script>
+    <script src="js/prompt-lab.js"></script>
+    <script src="js/pwa/install-prompt.js"></script>
+
+</body>
+
+</html>

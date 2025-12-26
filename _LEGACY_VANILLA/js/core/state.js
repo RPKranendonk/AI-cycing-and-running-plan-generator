@@ -1,0 +1,149 @@
+// ==========================================
+// APPLICATION STATE
+// Centralized state management
+// ==========================================
+
+const TODAY = new Date();
+let START_DATE = new Date(TODAY);
+
+/**
+ * Application state object
+ * Contains all shared state across the application
+ */
+let state = {
+    // API Keys & Provider
+    apiKey: localStorage.getItem('elite_apiKey') || '',
+    athleteName: localStorage.getItem('elite_athleteName') || '',
+    aiApiKey: localStorage.getItem('elite_aiApiKey') || '',
+    geminiApiKey: localStorage.getItem('elite_geminiApiKey') || '',
+    deepseekApiKey: localStorage.getItem('elite_deepseekApiKey') || '',
+    openRouterApiKey: localStorage.getItem('elite_openRouterApiKey') || '',
+    mistralApiKey: localStorage.getItem('elite_mistralApiKey') || '',
+    aiProvider: localStorage.getItem('elite_aiProvider') || 'openai',
+    athleteId: localStorage.getItem('elite_athleteId') || '0',
+
+    // Athlete Profile
+    weight: localStorage.getItem('elite_weight') || '',
+    maxHr: localStorage.getItem('elite_maxHr') || '',
+    trainingHistory: localStorage.getItem('elite_trainingHistory') || '',
+    injuries: localStorage.getItem('elite_injuries') || '',
+    gymAccess: localStorage.getItem('elite_gymAccess') || 'none',
+    gender: localStorage.getItem('elite_gender') || 'N/A',
+    athleteAge: localStorage.getItem('elite_athleteAge') || '',
+    trainingPreferences: localStorage.getItem('elite_trainingPreferences') || '',
+    currentFitness: localStorage.getItem('elite_currentFitness') || '',
+    athleteExperience: localStorage.getItem('elite_athleteExperience') || 'consistent',
+
+    // Fitness Metrics
+    lthrPace: localStorage.getItem('elite_lthrPace') || '',
+    lthrBpm: localStorage.getItem('elite_lthrBpm') || '',
+    ftp: localStorage.getItem('elite_ftp') || '',
+
+    // Goals & Dates
+    raceDate: localStorage.getItem('elite_raceDate') || '2026-04-12',
+    goalTime: localStorage.getItem('elite_goalTime') || '',
+    rampFactor: parseFloat(localStorage.getItem('elite_rampFactor')) || 1.10,
+    trainingGoal: localStorage.getItem('elite_trainingGoal') || 'event',
+    raceType: localStorage.getItem('elite_raceType') || 'Marathon',
+
+    // Sport Type
+    sportType: localStorage.getItem('elite_sportType') || 'Running',
+
+    // Data from Intervals.icu
+    wellness: [],
+    biometrics: { rhr: null, hrv: null, sleep: null, soreness: null, bodyBattery: null },
+    activities: [],
+    zones: null,
+    zonePcts: { z2: "Z2 Pace", z3: "Z3 Pace", z5: "Z5 Pace" },
+    fetchedZones: null,
+    thresholdSpeed: null,
+
+    // Plan State
+    modifications: {},
+    selectedWorkout: null,
+    generatedPlan: [],
+    progressionRate: parseFloat(localStorage.getItem('elite_progressionRate')) || 0.10,
+    startingVolume: parseFloat(localStorage.getItem('elite_startingVolume')) || 30,
+    startingLongRun: parseFloat(localStorage.getItem('elite_startingLongRun')) || 10,
+    longRunProgression: parseFloat(localStorage.getItem('elite_longRunProgression')) || 1.5,
+
+    // Cycling Specific
+    startTss: parseFloat(localStorage.getItem('elite_startTss')) || 300,
+    startLongRide: parseFloat(localStorage.getItem('elite_startLongRide')) || 2.0,
+    rampRate: parseFloat(localStorage.getItem('elite_rampRate')) || 5,
+
+    lastWeekLongRun: 0,
+
+    // Availability
+    defaultAvailableDays: JSON.parse(localStorage.getItem('elite_defaultDays') || '[1,3,5,0]'),
+    longRunDay: parseInt(localStorage.getItem('elite_longRunDay') || '0'),
+    weeklyAvailability: JSON.parse(localStorage.getItem('elite_weeklyAvail') || '{}'),
+
+    // Daily Availability (hours per day with split Morning/Evening support)
+    dailyAvailability: JSON.parse(localStorage.getItem('elite_dailyAvail') || JSON.stringify({
+        0: { hours: 2.0, split: false, amHours: 1.0, pmHours: 1.0 },  // Sunday
+        1: { hours: 2.0, split: false, amHours: 1.0, pmHours: 1.0 },  // Monday
+        2: { hours: 2.0, split: false, amHours: 1.0, pmHours: 1.0 },  // Tuesday
+        3: { hours: 2.0, split: false, amHours: 1.0, pmHours: 1.0 },  // Wednesday
+        4: { hours: 2.0, split: false, amHours: 1.0, pmHours: 1.0 },  // Thursday
+        5: { hours: 2.0, split: false, amHours: 1.0, pmHours: 1.0 },  // Friday
+        6: { hours: 2.0, split: false, amHours: 1.0, pmHours: 1.0 }   // Saturday
+    })),
+
+    // Generated Workouts
+    generatedWorkouts: {},
+
+    // Weekly Notes (AI-generated training notes for each week)
+    weeklyNotes: {},
+
+    // Custom Week Overrides
+    customRestWeeks: [],
+    forceBuildWeeks: [],
+
+    // UI State
+    draggedWorkout: null
+};
+
+
+// Load modifications from localStorage
+try {
+    state.modifications = JSON.parse(localStorage.getItem('elite_plan_mods') || '{}');
+} catch (e) {
+    state.modifications = {};
+    localStorage.setItem('elite_plan_mods', '{}');
+}
+
+/**
+ * Helper function to safely get a value from state
+ * @param {string} key - The state key
+ * @param {*} defaultVal - Default value if not found
+ * @returns {*} The state value or default
+ */
+function getStateValue(key, defaultVal = null) {
+    return state[key] !== undefined ? state[key] : defaultVal;
+}
+
+/**
+ * Helper function to update state and optionally persist to localStorage
+ * @param {string} key - The state key
+ * @param {*} value - The new value
+ * @param {boolean} persist - Whether to save to localStorage
+ */
+function setStateValue(key, value, persist = false) {
+    state[key] = value;
+    if (persist) {
+        const storageKey = `elite_${key}`;
+        if (typeof value === 'object') {
+            localStorage.setItem(storageKey, JSON.stringify(value));
+        } else {
+            localStorage.setItem(storageKey, value);
+        }
+    }
+}
+
+// Expose to window
+window.state = state;
+window.TODAY = TODAY;
+window.START_DATE = START_DATE;
+window.getStateValue = getStateValue;
+window.setStateValue = setStateValue;

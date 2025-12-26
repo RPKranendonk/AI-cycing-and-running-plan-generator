@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Verification | AI Coach</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;400;600;800&display=swap"
+        rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        slate: { 850: '#172033', 950: '#020617' }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #020617;
+            color: white;
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+    </style>
+</head>
+
+<body class="h-screen flex items-center justify-center relative overflow-hidden">
+
+    <!-- Background Elements -->
+    <div class="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
+    <div class="absolute top-0 left-0 w-96 h-96 bg-cyan-500/20 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2">
+    </div>
+    <div
+        class="absolute bottom-0 right-0 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl translate-x-1/2 translate-y-1/2">
+    </div>
+
+    <div class="glass-panel p-8 rounded-2xl max-w-md w-full mx-4 text-center relative z-10 shadow-2xl">
+
+        <!-- Icons -->
+        <div id="statusIcon"
+            class="w-20 h-20 mx-auto mb-6 rounded-full flex items-center justify-center text-3xl shadow-lg transition-all duration-500 bg-slate-800 text-slate-400">
+            <i class="fa-solid fa-circle-notch animate-spin"></i>
+        </div>
+
+        <h1 id="statusTitle" class="text-2xl font-bold mb-2">Verifying Payment...</h1>
+        <p id="statusMsg" class="text-slate-400 text-sm font-mono mb-8">Please wait while we confirm your transaction.
+        </p>
+
+        <div id="actions" class="hidden opacity-0 transition-opacity duration-500">
+            <a href="index.html"
+                class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-bold shadow-lg shadow-cyan-500/20 hover:scale-105 transition-transform">
+                <i class="fa-solid fa-arrow-right"></i> Continue to App
+            </a>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/features/payment/payment-service.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const sessionId = urlParams.get('session_id');
+
+            const iconEl = document.getElementById('statusIcon');
+            const titleEl = document.getElementById('statusTitle');
+            const msgEl = document.getElementById('statusMsg');
+            const actionsEl = document.getElementById('actions');
+
+            // Quick function to update UI state
+            const setSuccess = () => {
+                const athleteName = localStorage.getItem('elite_athleteName') || 'Athlete';
+
+                iconEl.className = "w-20 h-20 mx-auto mb-6 rounded-full flex items-center justify-center text-3xl shadow-lg transition-all duration-500 bg-emerald-500/20 text-emerald-400 shadow-emerald-500/20";
+                iconEl.innerHTML = '<i class="fa-solid fa-check"></i>';
+                titleEl.textContent = "Payment Successful!";
+                titleEl.className = "text-2xl font-bold mb-2 text-emerald-400";
+                msgEl.innerHTML = `Thank you, <span class="text-emerald-400 font-bold">${athleteName}</span>! <br>Your support helps keep this tool running.`;
+                msgEl.classList.add('text-lg');
+
+                actionsEl.classList.remove('hidden');
+                // Small delay to fade in
+                setTimeout(() => actionsEl.classList.remove('opacity-0'), 50);
+
+                // Auto redirect after 3s
+                setTimeout(() => {
+                    window.location.href = 'index.html';
+                }, 4000); // Increased delay slightly to let them read the message
+            };
+
+            const setError = (msg) => {
+                iconEl.className = "w-20 h-20 mx-auto mb-6 rounded-full flex items-center justify-center text-3xl shadow-lg transition-all duration-500 bg-red-500/20 text-red-400";
+                iconEl.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+                titleEl.textContent = "Verification Failed";
+                titleEl.className = "text-2xl font-bold mb-2 text-red-400";
+                msgEl.textContent = msg || "We couldn't verify the session ID.";
+            };
+
+            // Execution
+            if (sessionId) {
+                // Simulate verification delay for "Deep Integration" feel
+                setTimeout(() => {
+                    if (window.PaymentService) {
+                        const verified = window.PaymentService.verifySession(sessionId);
+                        if (verified) {
+                            setSuccess();
+                        } else {
+                            setError("Invalid Session ID.");
+                        }
+                    } else {
+                        setError("Service Error: Payment component not loaded.");
+                    }
+                }, 1500);
+            } else {
+                setError("No session ID found in URL.");
+            }
+        });
+    </script>
+</body>
+
+</html>

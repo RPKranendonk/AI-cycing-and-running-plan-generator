@@ -1,0 +1,93 @@
+{
+    "onboarding_flow_v2": {
+        "philosophy": "Get to the 'Aha!' moment (the Plan Preview) before asking for 'Homework' (API Keys).",
+        "steps": [
+            {
+                "id": "step_1_identity",
+                "title": "Who are you as an athlete?",
+                "ui_elements": [
+                    {
+                        "type": "card_select",
+                        "options": [
+                            "Running 🏃‍♂️",
+                            "Cycling 🚴"
+                        ]
+                    },
+                    {
+                        "type": "slider",
+                        "label": "Experience Level",
+                        "values": [
+                            "Fresh",
+                            "Consistent",
+                            "Pro"
+                        ]
+                    }
+                ],
+                "copy_change": "Instead of 'Select Sport', ask 'What moves you?'"
+            },
+            {
+                "id": "step_2_goal",
+                "title": "What's the big dream?",
+                "ui_elements": [
+                    {
+                        "type": "card_select",
+                        "options": [
+                            "First 5K",
+                            "Marathon PB",
+                            "Just fit"
+                        ]
+                    }
+                ],
+                "copy_change": "Replace technical labels. 'General Fitness' -> 'Stay Healthy & Strong'"
+            },
+            {
+                "id": "step_3_constraints",
+                "title": "Reality Check",
+                "ui_elements": [
+                    {
+                        "type": "day_selector",
+                        "label": "Training Days per Week"
+                    },
+                    {
+                        "type": "calendar",
+                        "label": "Race Date (Optional)"
+                    }
+                ],
+                "note": "Remove 'Start Date'. Default to Today/Monday. Reduce friction."
+            },
+            {
+                "id": "step_4_magic_moment",
+                "title": "Your Season at a Glance",
+                "action": "Generate Weekly Template Preview NOW.",
+                "ui_elements": [
+                    {
+                        "type": "drag_drop_schedule",
+                        "description": "Interactive Week View"
+                    }
+                ],
+                "psychology": "Show value first. User sees the shiny plan structure."
+            },
+            {
+                "id": "step_5_commitment",
+                "title": "Make it Real",
+                "ui_elements": [
+                    {
+                        "type": "input",
+                        "label": "Intervals.icu API Key (Optional for Demo)"
+                    },
+                    {
+                        "type": "button",
+                        "label": "Sync Later",
+                        "action": "skip_sync"
+                    }
+                ],
+                "copy_change": "Don't block the user. Allow 'Guest Mode' or 'Demo'."
+            }
+        ],
+        "3_quick_wins_implemented": [
+            "Slider Thumb Alignment fixed (-7px margin).",
+            "Light Mode Input Contrast increased (border-opacity 0.25).",
+            "Pro Toggle added to hide 'scary' technical fields (TSS/CTL)."
+        ]
+    }
+}
