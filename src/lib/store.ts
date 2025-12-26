@@ -55,6 +55,13 @@ interface AppState {
         taperDuration: number;
         startWithRestWeek: boolean;
     };
+
+    // UI Preferences (Persisted)
+    preferences: {
+        proMode: boolean;      // Show advanced metrics (CTL, TSS, etc.)
+        darkMode: boolean;
+    };
+
     // UI State
     viewMode: ViewMode;
     selectedWeek: number;
@@ -77,6 +84,7 @@ interface AppState {
     setSelectedWeek: (week: number) => void;
     setDragState: (state: DragState | null) => void;
     setLoading: (loading: boolean) => void;
+    setPreferences: (prefs: Partial<AppState['preferences']>) => void;
     reset: () => void;
 }
 
